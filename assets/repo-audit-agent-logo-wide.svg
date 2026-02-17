@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 200" width="960" height="200">
+  <defs>
+    <linearGradient id="shieldGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#0f172a"/>
+      <stop offset="50%" style="stop-color:#1e3a5f"/>
+      <stop offset="100%" style="stop-color:#0c4a6e"/>
+    </linearGradient>
+    <linearGradient id="accentGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#06b6d4"/>
+      <stop offset="100%" style="stop-color:#22d3ee"/>
+    </linearGradient>
+    <linearGradient id="scanGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:0"/>
+      <stop offset="50%" style="stop-color:#22d3ee;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#06b6d4;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow2">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- === Icon (scaled down shield) === -->
+  <g transform="translate(20, 5) scale(0.37)" filter="url(#shadow2)">
+    <!-- Shield body -->
+    <path d="M256 52 L420 120 L420 260 Q420 380 256 460 Q92 380 92 260 L92 120 Z"
+          fill="url(#shieldGrad2)" stroke="url(#accentGrad2)" stroke-width="3"/>
+    <!-- Inner border -->
+    <path d="M256 72 L402 132 L402 258 Q402 368 256 440 Q110 368 110 258 L110 132 Z"
+          fill="none" stroke="#06b6d4" stroke-width="1" opacity="0.3"/>
+    <!-- Code brackets -->
+    <g filter="url(#glow2)">
+      <path d="M175 195 L145 255 L175 315" fill="none" stroke="#06b6d4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M337 195 L367 255 L337 315" fill="none" stroke="#06b6d4" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <!-- Code lines -->
+    <g opacity="0.5">
+      <rect x="195" y="210" width="90" height="4" rx="2" fill="#94a3b8"/>
+      <rect x="205" y="228" width="70" height="4" rx="2" fill="#64748b"/>
+      <rect x="195" y="246" width="85" height="4" rx="2" fill="#94a3b8"/>
+      <rect x="210" y="264" width="55" height="4" rx="2" fill="#64748b"/>
+      <rect x="195" y="282" width="95" height="4" rx="2" fill="#94a3b8"/>
+      <rect x="200" y="300" width="75" height="4" rx="2" fill="#64748b"/>
+    </g>
+    <!-- Scan beam -->
+    <g filter="url(#glow2)">
+      <rect x="185" y="253" width="142" height="2" rx="1" fill="url(#scanGrad2)" opacity="0.9"/>
+    </g>
+    <!-- Magnifying glass -->
+    <g transform="translate(340, 330)">
+      <circle cx="0" cy="0" r="42" fill="none" stroke="url(#accentGrad2)" stroke-width="5"/>
+      <circle cx="0" cy="0" r="38" fill="#0f172a" opacity="0.6"/>
+      <line x1="28" y1="28" x2="58" y2="58" stroke="url(#accentGrad2)" stroke-width="7" stroke-linecap="round"/>
+      <path d="M-14 2 L-4 12 L16 -10" fill="none" stroke="#22c55e" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+    <!-- Finding dots -->
+    <circle cx="310" cy="218" r="5" fill="#ef4444" opacity="0.9"/>
+    <circle cx="298" cy="290" r="5" fill="#f59e0b" opacity="0.9"/>
+    <circle cx="305" cy="252" r="4" fill="#22c55e" opacity="0.9"/>
+  </g>
+
+  <!-- === Text === -->
+  <g>
+    <!-- "REPO AUDIT" - main title -->
+    <text x="230" y="95" font-family="'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="56" fill="#e2e8f0" letter-spacing="3">
+      REPO AUDIT
+    </text>
+    <!-- "AGENT" - accent color -->
+    <text x="600" y="95" font-family="'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="56" fill="#06b6d4" letter-spacing="3">
+      AGENT
+    </text>
+    <!-- Tagline -->
+    <text x="230" y="132" font-family="'Segoe UI', 'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="400" font-size="18" fill="#64748b" textLength="565" lengthAdjust="spacing">
+      STATIC ANALYSIS FOR TEST AUTOMATION FRAMEWORKS
+    </text>
+    <!-- Decorative accent line -->
+    <rect x="230" y="145" width="0" height="2" rx="1" fill="#06b6d4"/>
+    <!-- Version / descriptor pills -->
+    <g transform="translate(230, 160)">
+      <rect x="0" y="0" width="85" height="22" rx="11" fill="none" stroke="#06b6d4" stroke-width="1" opacity="0.5"/>
+      <text x="42" y="15" font-family="'Segoe UI', 'Inter', monospace" font-weight="500" font-size="11" fill="#06b6d4" text-anchor="middle" letter-spacing="1">PLAYWRIGHT</text>
+
+      <rect x="95" y="0" width="70" height="22" rx="11" fill="none" stroke="#06b6d4" stroke-width="1" opacity="0.5"/>
+      <text x="130" y="15" font-family="'Segoe UI', 'Inter', monospace" font-weight="500" font-size="11" fill="#06b6d4" text-anchor="middle" letter-spacing="1">CYPRESS</text>
+
+      <rect x="175" y="0" width="78" height="22" rx="11" fill="none" stroke="#06b6d4" stroke-width="1" opacity="0.5"/>
+      <text x="214" y="15" font-family="'Segoe UI', 'Inter', monospace" font-weight="500" font-size="11" fill="#06b6d4" text-anchor="middle" letter-spacing="1">SELENIUM</text>
+
+      <rect x="263" y="0" width="38" height="22" rx="11" fill="none" stroke="#06b6d4" stroke-width="1" opacity="0.5"/>
+      <text x="282" y="15" font-family="'Segoe UI', 'Inter', monospace" font-weight="500" font-size="11" fill="#06b6d4" text-anchor="middle" letter-spacing="1">CI</text>
+    </g>
+  </g>
+</svg>

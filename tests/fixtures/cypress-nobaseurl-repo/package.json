@@ -1,0 +1,7 @@
+{
+  "name": "cypress-nobaseurl-repo",
+  "version": "1.0.0",
+  "devDependencies": {
+    "cypress": "^13.6.0"
+  }
+}

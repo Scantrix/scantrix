@@ -1,0 +1,30 @@
+{
+  "name": "repo-audit-agent",
+  "version": "4.2.0",
+  "description": "Static analysis and configuration-aware auditing engine for Playwright automation repositories",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/cli.js",
+    "audit": "npm run build && node dist/cli.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "dependencies": {
+    "fast-glob": "^3.3.3",
+    "markdown-it": "^14.1.0",
+    "minimist": "^1.2.8"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/minimist": "^1.2.5",
+    "@types/node": "^25.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
+    "vitest": "^3.0.0"
+  }
+}

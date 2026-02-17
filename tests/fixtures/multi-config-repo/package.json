@@ -1,0 +1,6 @@
+{
+  "name": "multi-config-repo",
+  "devDependencies": {
+    "@playwright/test": "^1.40.0"
+  }
+}

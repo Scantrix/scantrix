@@ -1,0 +1,161 @@
+*************************************************************************************
+Revenue Potential & Business Analysis
+Market Opportunity: REAL
+**************************************************************************************
+
+Enterprise Playwright adoption is growing rapidly (Microsoft invests heavily in Playwright)
+No direct competitor does config+CI+code correlation audits
+The closest tools (ESLint-plugin-playwright, SonarQube) operate file-by-file with no CI awareness
+Target customer: enterprises with 200-5000+ Playwright tests (banks, insurance, SaaS companies)
+
+Pricing Models That Work:
+Audit-as-a-Service: $2,000-$10,000 per repo audit (consulting-attached) — viable TODAY
+SaaS per-repo subscription: $200-$500/month per repo (CI-integrated recurring scans)
+Enterprise site license: $20,000-$50,000/year for unlimited repos
+Open-core model: Open-source scanner, paid dashboard/trending/Slack integration
+Revenue Estimate (conservative, Year 1):
+
+20 consulting audits × $5,000 = $100K
+10 SaaS subscribers × $400/month × 12 = $48K
+Year 1 target: $100K-$150K (realistic with founder-led sales)
+
+
+Next Steps to Production-Ready (Prioritized)
+Phase 1: Foundational (Weeks 1-4)
+Add automated tests — The tool has zero tests. Before adding features, add integration tests that run the scanner against fixture repos with known issues. This is table stakes for selling a quality tool.
+Add Cypress/Selenium support — Even basic detection for Cypress (cy.wait(), cy.get() patterns) doubles your addressable market.
+Fix config parser robustness — Move from regex-only to AST-based parsing for playwright.config.ts using ts-morph or TypeScript compiler API. Regex will break on real-world configs with computed values, spread operators, and multi-file configs.
+Add --format CLI flag — Support json, md, html, sarif output (SARIF enables IDE integration).
+
+Phase 2: Product (Weeks 5-8)
+Trend tracking / diff mode — Store previous scan results and show delta: "3 new issues, 2 resolved since last audit." This is the #1 feature that converts one-time audits into recurring subscriptions.
+GitHub App / CI integration — Run on PR and post a comment summary. This is the main SaaS wedge.
+Custom rule configuration — Allow .auditrc.json to disable/override rules, adjust thresholds, add custom file exclusions. Enterprise customers will demand this.
+Web dashboard — Simple Next.js app showing historical audit results, trending risk scores, comparison across repos.
+
+Phase 3: Go-to-Market (Weeks 9-12)
+Landing page + documentation site — Professional docs with example reports, pricing tiers, demo video.
+SARIF output — Enables integration with GitHub Code Scanning, Azure DevOps, and VS Code Problems panel.
+SOC2/security review — Since you're reading customer repos, enterprise buyers will ask about data handling. Prepare a security whitepaper (the tool is read-only, which is excellent).
+npm package publishing — Publish as npx repo-audit-agent for self-service adoption.
+
+Phase 4: Scale
+Multi-framework — Cypress, Selenium, WebdriverIO, TestCafe
+AI-powered remediation suggestions — Use LLMs to generate specific fix PRs based on findings
+Team/org dashboard — Aggregate risk across multiple repos for engineering leadership
+
+****** TREND TRACKING***************
+Trend tracking / diff mode — No database required. The current tool already outputs findings.json and repo_inventory.json. Diff mode just needs to compare the current scan against a previous snapshot. You can store timestamped JSON files on disk:
+
+This is a file-based approach — read the latest two snapshots, compute the delta, emit a diff.json with { added: [], resolved: [], unchanged: [] }. No persistence layer needed beyond the filesystem.
+
+Web dashboard — Yes, you'd want a database, but it can be lightweight:
+
+Option	Complexity	Best for
+SQLite	Zero-config, single file	Solo / small team, local dashboard
+PostgreSQL	Managed service needed	Multi-tenant SaaS, concurrent users
+JSON files + Next.js API routes	No DB at all	MVP / demo only (won't scale past ~50 repos)
+My recommendation: Start with SQLite via Prisma or Drizzle in the Next.js app. It gives you:
+
+No infrastructure to manage (single .db file)
+Real queries for trending/comparison across repos
+Easy migration to Postgres later if you go SaaS
+The schema would be minimal:
+
+~3 tables. The CLI writes scan results to the DB (or a post-scan import script reads the JSON output and inserts it). The Next.js dashboard reads from it.
+
+Bottom line: Diff mode is a CLI-only feature that works with flat files. The dashboard is where a database earns its keep — but SQLite keeps it zero-infrastructure until you need to scale.
+**********************************************************************************************************
+
+
+
+*************************************************************************************************************
+*******************************  W E B  D A S H B O A R D ***************************************************
+*************************************************************************************************************
+Model 1: CLI-First (Simplest — start here)
+Customer runs your CLI locally (or in their CI pipeline) and the results get pushed to the dashboard.
+
+How it works:
+
+Customer installs the CLI (npm i -g qaverity or runs via npx)
+Scans happen locally — code never leaves their machine
+Only the findings JSON (rule IDs, file paths, severity, line numbers) gets sent to your API
+Dashboard displays history, trends, comparisons
+Why this wins: No repo access needed. No OAuth. No security concerns. The customer's source code never touches your servers — only metadata about findings.
+
+Model 2: GitHub App Integration (Medium complexity)
+Customer installs a GitHub App. You clone/scan on your infra.
+
+This is how SonarCloud, CodeClimate, etc. work. It requires:
+
+A GitHub App with repo read permissions
+A job runner (Lambda, Cloud Run, etc.) that clones and scans
+More trust from the customer (they're granting code access)
+Save this for later. It's the SaaS play but adds significant infra and security responsibility.
+
+Model 3: CI-Only (Best middle ground)
+Customer adds a step to their existing CI pipeline. No GitHub App needed.
+
+This is Model 1 but automated. Every PR or nightly build pushes fresh results. The dashboard shows trends over time automatically.
+
+Recommended path
+Phase	Model	Effort
+Now	CLI produces local JSON (already done)	✅ Done
+Next	Add qaverity push command + simple API endpoint	~1 week
+Then	Next.js dashboard reading from SQLite/Postgres	~2-3 weeks
+Later	GitHub App for zero-config scanning	Significant
+The key insight: your scanner already runs locally and produces structured JSON. The dashboard is just a viewer for that data over time. The customer's workflow is:
+
+Sign up → get an API key
+Add one line to CI → npx qaverity push
+Open dashboard → see trends, diffs, risk scores across all their repos
+No repo uploading. No code on your servers. Just findings metadata flowing to an API.
+**************************************************************************************************
+
+
+*********************************************************************************************
+P A Y M E N T S
+***********************************************************************************************
+Stripe is the standard answer. Here's how it fits:
+
+Payment Architecture
+How it works technically
+1. Stripe Checkout (hosted payment page)
+
+Customer clicks "Subscribe" on your marketing site
+Redirected to Stripe's hosted checkout (you never touch card numbers)
+Stripe handles PCI compliance, tax calculation, receipts
+On success, webhook fires → you create the customer record + API key
+2. Subscription tiers (defined in Stripe dashboard)
+
+Tier	Price	Limits
+Free	$0	1 repo, 5 scans/month, no dashboard
+Pro	$49/mo	10 repos, unlimited scans, dashboard + trends
+Team	$149/mo	50 repos, team access, priority support
+Enterprise	Custom	Unlimited, SSO, on-prem option
+3. What you build
+
+Component	Tech	Purpose
+Checkout page	Stripe Checkout (hosted)	Zero payment UI to build
+Webhook endpoint	POST /api/webhooks/stripe	Sync subscription status to your DB
+API key gating	Middleware in your API	Reject qaverity push if subscription inactive/over limit
+Customer portal	Stripe Customer Portal (hosted)	Customers manage billing, cancel, update card — you build nothing
+4. Code involved is minimal
+
+5. Enforcement flow
+
+Why Stripe specifically
+No PCI burden — you never see card numbers
+Hosted Checkout + Customer Portal — you build zero payment UI
+Webhooks — subscription lifecycle is event-driven
+Usage-based billing available if you later want per-scan pricing
+Tax compliance (Stripe Tax) handles global VAT/sales tax
+Test mode — full sandbox with test card numbers during development
+Alternatives (and why not)
+Option	Verdict
+Paddle / Lemon Squeezy	Good if you want them to be merchant of record (they handle tax/invoicing entirely). Slightly less control.
+PayPal	Worse developer experience, still a viable secondary payment method
+Build your own	Never. PCI compliance alone costs more than your product.
+Bottom line: Stripe Checkout + Stripe Customer Portal means you write ~100 lines of webhook handling code and zero payment UI. Customers get a polished payment experience, and you spend your time on the scanner, not billing infrastructure.
+
+Claude

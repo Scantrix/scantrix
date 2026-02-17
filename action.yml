@@ -1,0 +1,233 @@
+name: "Qaverity Audit"
+description: "Run Qaverity static analysis on your test automation repo and get a quality report"
+author: "Qaverity"
+
+branding:
+  icon: "shield"
+  color: "blue"
+
+inputs:
+  repo-path:
+    description: "Path to the repository to scan (defaults to workspace root)"
+    required: false
+    default: "."
+  output-dir:
+    description: "Directory to write audit artifacts"
+    required: false
+    default: "./qaverity-out"
+  config-path:
+    description: "Path to .auditrc.json config file"
+    required: false
+  format:
+    description: "Output formats (comma-separated: md,html,json,sarif,email)"
+    required: false
+    default: "md,html,json,sarif"
+  check-updates:
+    description: "Check npm registry for outdated dependencies"
+    required: false
+    default: "false"
+  post-comment:
+    description: "Post a summary comment on the PR (true/false)"
+    required: false
+    default: "true"
+  fail-on-high:
+    description: "Fail the action if high-severity findings are detected"
+    required: false
+    default: "false"
+  api-key:
+    description: "Qaverity API key for pushing results to dashboard"
+    required: false
+  api-url:
+    description: "Qaverity API URL (defaults to https://api.qaverity.com)"
+    required: false
+    default: "https://api.qaverity.com"
+
+outputs:
+  findings-count:
+    description: "Total number of findings detected"
+  high-count:
+    description: "Number of high-severity findings"
+  medium-count:
+    description: "Number of medium-severity findings"
+  low-count:
+    description: "Number of low-severity findings"
+  risk-grade:
+    description: "Overall risk grade (A-F)"
+  report-path:
+    description: "Path to the generated report directory"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: "20"
+
+    - name: Install Qaverity
+      shell: bash
+      run: npm install -g repo-audit-agent
+
+    - name: Run Audit
+      id: audit
+      shell: bash
+      run: |
+        ARGS="${{ inputs.repo-path }} --out ${{ inputs.output-dir }} --format ${{ inputs.format }}"
+
+        if [ "${{ inputs.config-path }}" != "" ]; then
+          ARGS="$ARGS --config ${{ inputs.config-path }}"
+        fi
+
+        if [ "${{ inputs.check-updates }}" = "true" ]; then
+          ARGS="$ARGS --updates"
+        fi
+
+        echo "[qaverity] Running: qaverity $ARGS"
+        npx repo-audit-agent $ARGS
+
+        # Parse findings.json for outputs
+        FINDINGS_FILE="${{ inputs.output-dir }}/findings.json"
+        if [ -f "$FINDINGS_FILE" ]; then
+          TOTAL=$(jq 'length' "$FINDINGS_FILE")
+          HIGH=$(jq '[.[] | select(.severity == "high")] | length' "$FINDINGS_FILE")
+          MEDIUM=$(jq '[.[] | select(.severity == "medium")] | length' "$FINDINGS_FILE")
+          LOW=$(jq '[.[] | select(.severity == "low")] | length' "$FINDINGS_FILE")
+
+          echo "findings-count=$TOTAL" >> $GITHUB_OUTPUT
+          echo "high-count=$HIGH" >> $GITHUB_OUTPUT
+          echo "medium-count=$MEDIUM" >> $GITHUB_OUTPUT
+          echo "low-count=$LOW" >> $GITHUB_OUTPUT
+          echo "report-path=${{ inputs.output-dir }}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Upload Report Artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: qaverity-report
+        path: ${{ inputs.output-dir }}
+        retention-days: 30
+
+    - name: Post PR Comment
+      if: inputs.post-comment == 'true' && github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = require('path');
+
+          const outDir = '${{ inputs.output-dir }}';
+          const findingsFile = path.join(outDir, 'findings.json');
+          const diffFile = path.join(outDir, 'audit_diff.json');
+
+          if (!fs.existsSync(findingsFile)) {
+            console.log('No findings.json found, skipping comment');
+            return;
+          }
+
+          const findings = JSON.parse(fs.readFileSync(findingsFile, 'utf8'));
+          const high = findings.filter(f => f.severity === 'high').length;
+          const medium = findings.filter(f => f.severity === 'medium').length;
+          const low = findings.filter(f => f.severity === 'low').length;
+          const total = findings.length;
+
+          // Grade calculation (mirrors report.ts logic)
+          const score = high * 10 + medium * 4 + low * 1;
+          const grade = score <= 20 ? 'A' : score <= 50 ? 'B' : score <= 85 ? 'C' : score <= 120 ? 'D' : 'F';
+          const gradeEmoji = { A: '🟢', B: '🔵', C: '🟡', D: '🟠', F: '🔴' }[grade] || '⚪';
+
+          let body = `## ${gradeEmoji} Qaverity Audit Report\n\n`;
+          body += `| Metric | Value |\n|--------|-------|\n`;
+          body += `| **Grade** | **${grade}** |\n`;
+          body += `| Total Findings | ${total} |\n`;
+          body += `| 🔴 High | ${high} |\n`;
+          body += `| 🟠 Medium | ${medium} |\n`;
+          body += `| 🟡 Low | ${low} |\n\n`;
+
+          // Diff section if available
+          if (fs.existsSync(diffFile)) {
+            try {
+              const diff = JSON.parse(fs.readFileSync(diffFile, 'utf8'));
+              if (diff.newFindings?.length > 0 || diff.resolvedFindings?.length > 0) {
+                body += `### Trend Delta\n\n`;
+                if (diff.newFindings.length > 0) {
+                  body += `**🆕 ${diff.newFindings.length} new issue${diff.newFindings.length > 1 ? 's' : ''}:**\n`;
+                  for (const f of diff.newFindings.slice(0, 5)) {
+                    const sev = f.severity === 'high' ? '🔴' : f.severity === 'medium' ? '🟠' : '🟡';
+                    body += `- ${sev} \`${f.findingId}\`: ${f.title}\n`;
+                  }
+                  if (diff.newFindings.length > 5) body += `- ... and ${diff.newFindings.length - 5} more\n`;
+                  body += `\n`;
+                }
+                if (diff.resolvedFindings.length > 0) {
+                  body += `**✅ ${diff.resolvedFindings.length} resolved:**\n`;
+                  for (const f of diff.resolvedFindings.slice(0, 5)) {
+                    body += `- ~~\`${f.findingId}\`: ${f.title}~~\n`;
+                  }
+                  if (diff.resolvedFindings.length > 5) body += `- ... and ${diff.resolvedFindings.length - 5} more\n`;
+                  body += `\n`;
+                }
+              }
+            } catch (e) {
+              console.log('Could not parse diff file:', e);
+            }
+          }
+
+          // Top findings
+          if (findings.length > 0) {
+            body += `<details>\n<summary>Top Findings</summary>\n\n`;
+            body += `| ID | Title | Severity |\n|----|-------|----------|\n`;
+            for (const f of findings.slice(0, 10)) {
+              const sev = f.severity === 'high' ? '🔴 High' : f.severity === 'medium' ? '🟠 Medium' : '🟡 Low';
+              body += `| \`${f.findingId}\` | ${f.title} | ${sev} |\n`;
+            }
+            if (findings.length > 10) body += `\n*... and ${findings.length - 10} more findings*\n`;
+            body += `\n</details>\n`;
+          }
+
+          body += `\n---\n*Generated by [Qaverity](https://qaverity.com) — Test Automation Intelligence*`;
+
+          // Find existing comment to update (avoid spamming)
+          const { data: comments } = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.issue.number,
+          });
+          const existingComment = comments.find(c => c.body && c.body.includes('Qaverity Audit Report'));
+
+          if (existingComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: existingComment.id,
+              body,
+            });
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body,
+            });
+          }
+
+    - name: Push to Dashboard
+      if: inputs.api-key != ''
+      shell: bash
+      env:
+        QAVERITY_API_KEY: ${{ inputs.api-key }}
+        QAVERITY_API_URL: ${{ inputs.api-url }}
+        GITHUB_REPOSITORY: ${{ github.repository }}
+      run: |
+        npx repo-audit-agent push "${{ inputs.output-dir }}/findings.json" \
+          --key "$QAVERITY_API_KEY" --url "$QAVERITY_API_URL" \
+          --repo "$GITHUB_REPOSITORY"
+
+    - name: Fail on High Severity
+      if: inputs.fail-on-high == 'true'
+      shell: bash
+      run: |
+        HIGH=${{ steps.audit.outputs.high-count }}
+        if [ "$HIGH" != "0" ] && [ "$HIGH" != "" ]; then
+          echo "::error::Qaverity found $HIGH high-severity findings. Failing build."
+          exit 1
+        fi

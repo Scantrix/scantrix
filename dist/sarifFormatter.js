@@ -1,0 +1,81 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.toSarif = toSarif;
+function toSarifLevel(severity) {
+    switch (severity) {
+        case "high":
+            return "error";
+        case "medium":
+            return "warning";
+        case "low":
+            return "note";
+    }
+}
+/**
+ * Convert ScanResults into a SARIF 2.1.0 document.
+ * Usable with GitHub Code Scanning, Azure DevOps, and VS Code SARIF Viewer.
+ */
+function toSarif(results) {
+    const repoPath = results.repoPath.replace(/\\/g, "/");
+    // Deduplicate rules by findingId
+    const seenRuleIds = new Set();
+    const rules = [];
+    for (const f of results.findings) {
+        if (seenRuleIds.has(f.findingId))
+            continue;
+        seenRuleIds.add(f.findingId);
+        rules.push({
+            id: f.findingId,
+            shortDescription: { text: f.title },
+            fullDescription: { text: f.description },
+            defaultConfiguration: { level: toSarifLevel(f.severity) },
+            help: { text: f.recommendation, markdown: f.recommendation },
+        });
+    }
+    const sarifResults = [];
+    for (const f of results.findings) {
+        for (const e of f.evidence) {
+            const uri = e.file.replace(/\\/g, "/");
+            // Make path relative to repo root when possible
+            const relativeUri = uri.startsWith(repoPath)
+                ? uri.slice(repoPath.length + 1)
+                : uri;
+            // Skip synthetic/summary evidence that doesn't point to real files
+            if (relativeUri.includes("(CI summary)") ||
+                relativeUri.includes("(correlation") ||
+                relativeUri.includes("(analysis summary)")) {
+                continue;
+            }
+            sarifResults.push({
+                ruleId: f.findingId,
+                level: toSarifLevel(f.severity),
+                message: { text: `${f.title}: ${e.snippet}` },
+                locations: [
+                    {
+                        physicalLocation: {
+                            artifactLocation: { uri: relativeUri },
+                            region: { startLine: Math.max(e.line, 1) },
+                        },
+                    },
+                ],
+            });
+        }
+    }
+    return {
+        $schema: "https://raw.githubusercontent.com/oasis-tcs/sarif-spec/main/sarif-2.1/schema/sarif-schema-2.1.0.json",
+        version: "2.1.0",
+        runs: [
+            {
+                tool: {
+                    driver: {
+                        name: "repo-audit-agent",
+                        version: "2.5.0",
+                        informationUri: "https://github.com/user/repo-audit-agent",
+                        rules,
+                    },
+                },
+                results: sarifResults,
+            },
+        ],
+    };
+}

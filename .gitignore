@@ -1,0 +1,8 @@
+@"
+node_modules/
+dashboard/node_modules/
+.next/
+dashboard/.next/
+audit-out/
+"@ | Out-File -FilePath .gitignore -Append -Encoding utf8
+node_modules
