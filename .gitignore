@@ -1,8 +1,31 @@
-@"
+# Dependencies
 node_modules/
-dashboard/node_modules/
+
+# Build output
+dist/
+
+# Next.js
 .next/
-dashboard/.next/
+
+# Audit output (generated)
 audit-out/
-"@ | Out-File -FilePath .gitignore -Append -Encoding utf8
-node_modules
+
+# Environment files
+.env
+.env.local
+.env.*.local
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+*.swp
+
+# Binary / marketing docs
+*.docx
+
+# Dev scratch files
+notes.txt
+assets/_preview.html
