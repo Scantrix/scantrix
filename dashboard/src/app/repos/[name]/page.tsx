@@ -13,7 +13,7 @@ import {
   Clock, ChevronDown, ChevronRight, Settings, GitBranch, Monitor,
   Smartphone, Server, Workflow, Target, Zap, Flame, ListChecks,
   FolderOpen, Package, FileCode, Layers, BarChart3, SearchCode,
-  Scan
+  Scan, Hourglass, TrendingDown, Wrench
 } from "lucide-react";
 
 /* ── Types ── */
@@ -183,6 +183,146 @@ function computeActions(findings: Finding[]): ActionItem[] {
   }
 
   return actions;
+}
+
+/* ── Effort Estimation & Remediation Time ── */
+interface EffortItem { finding: string; effort: string; impact: string }
+interface TimeEstimate {
+  toGoodGrade: { minHours: number; maxHours: number };
+  toAllResolved: { minHours: number; maxHours: number };
+  highPriorityCount: number;
+  totalIssueCount: number;
+}
+
+function categorizeFindings(findings: Finding[]): { quickWins: EffortItem[]; largerEfforts: EffortItem[] } {
+  const quickWins: EffortItem[] = [];
+  const largerEfforts: EffortItem[] = [];
+
+  for (const f of findings) {
+    const fc = new Set(f.evidence.map(e => e.file)).size;
+    const occ = f.evidence_count;
+
+    switch (f.finding_id) {
+      case "PW-FLAKE-002":
+      case "CY-FLAKE-003":
+        if (occ <= 5) quickWins.push({ finding: `Fix ${occ} force-click${occ > 1 ? "s" : ""}`, effort: "~30 min", impact: "Reduces hidden UI issues" });
+        else largerEfforts.push({ finding: `Fix ${occ} force-clicks across ${fc} files`, effort: "2–4 hours", impact: "Reduces hidden UI issues" });
+        break;
+      case "PW-LOC-001":
+        if (fc <= 2) quickWins.push({ finding: `Refactor ${occ} XPath selectors in ${fc} file${fc > 1 ? "s" : ""}`, effort: "1–2 hours", impact: "More maintainable locators" });
+        else largerEfforts.push({ finding: `Refactor ${occ} XPath selectors across ${fc} files`, effort: "4–8 hours", impact: "More maintainable locators" });
+        break;
+      case "PW-FLAKE-001":
+        if (occ <= 5) quickWins.push({ finding: `Remove ${occ} hard wait${occ > 1 ? "s" : ""}`, effort: "1–2 hours", impact: "Faster, more stable tests" });
+        else largerEfforts.push({ finding: `Remove ${occ} hard waits across ${fc} files`, effort: "4–8 hours", impact: "Faster, more stable tests" });
+        break;
+      case "PW-STABILITY-001":
+        largerEfforts.push({ finding: `Add cleanup hooks to ${fc} test file${fc > 1 ? "s" : ""}`, effort: "2–4 hours", impact: "Better test isolation" });
+        break;
+      case "PW-STABILITY-003":
+        largerEfforts.push({ finding: `Move page-based setup out of beforeAll in ${fc} file${fc > 1 ? "s" : ""}`, effort: "2–6 hours", impact: "Prevents shared state + flaky cascades" });
+        break;
+      case "CI-006":
+        quickWins.push({ finding: "Standardize WORKERS env across pipelines", effort: "30 min", impact: "Consistent CI behavior" });
+        break;
+      case "CI-007":
+        largerEfforts.push({ finding: "Implement test sharding in CI", effort: "2–4 hours", impact: "50–75% faster CI" });
+        break;
+      case "CI-005":
+        quickWins.push({ finding: "Add dependency caching to CI", effort: "30 min", impact: "Faster CI install phase" });
+        break;
+      case "PW-INSIGHT-002":
+        quickWins.push({ finding: "Reduce test timeout configuration", effort: "15 min", impact: "Faster failure feedback" });
+        break;
+      case "ARCH-001":
+        largerEfforts.push({ finding: `Create BasePage pattern for ${fc} POM${fc > 1 ? "s" : ""}`, effort: "2–4 hours", impact: "Consistent POM patterns" });
+        break;
+      case "ARCH-002":
+        if (occ <= 3) quickWins.push({ finding: `Encapsulate locators in ${fc} POM${fc > 1 ? "s" : ""}`, effort: "1–2 hours", impact: "Better encapsulation" });
+        else largerEfforts.push({ finding: `Encapsulate locators in ${fc} POMs`, effort: "4–8 hours", impact: "Better encapsulation" });
+        break;
+      case "ARCH-003":
+        largerEfforts.push({ finding: `Decouple ${fc} test file${fc > 1 ? "s" : ""} from test imports`, effort: "2–4 hours", impact: "Better test isolation" });
+        break;
+      case "ARCH-004":
+        if (fc <= 2) quickWins.push({ finding: `Add fixture typing to ${fc} file${fc > 1 ? "s" : ""}`, effort: "1 hour", impact: "Type safety in tests" });
+        else largerEfforts.push({ finding: `Add fixture typing to ${fc} files`, effort: "2–4 hours", impact: "Type safety in tests" });
+        break;
+      case "ARCH-005":
+        quickWins.push({ finding: "Move credentials to env variables", effort: "30 min", impact: "Security + env flexibility" });
+        break;
+      case "ARCH-005a":
+        if (occ <= 10) quickWins.push({ finding: `Replace ${occ} hardcoded email${occ > 1 ? "s" : ""} with faker/factory`, effort: "1 hour", impact: "Fewer test conflicts" });
+        else largerEfforts.push({ finding: `Replace ${occ} hardcoded emails with data factory`, effort: "2–4 hours", impact: "Fewer test conflicts" });
+        break;
+      case "ARCH-006":
+        largerEfforts.push({ finding: "Implement API mocking patterns", effort: "4–8 hours", impact: "Faster, isolated tests" });
+        break;
+      case "ARCH-007":
+        largerEfforts.push({ finding: `Create custom error types for ${fc} POM${fc > 1 ? "s" : ""}`, effort: "2–4 hours", impact: "Better error handling" });
+        break;
+      case "DEP-001":
+        if (occ <= 3) quickWins.push({ finding: `Update ${occ} outdated package${occ > 1 ? "s" : ""}`, effort: "1–2 hours", impact: "Stay current, reduce flakiness" });
+        else largerEfforts.push({ finding: `Update ${occ} outdated packages`, effort: "2–4 hours", impact: "Stay current, reduce flakiness" });
+        break;
+      case "DEP-002":
+        largerEfforts.push({ finding: `Replace ${occ} deprecated npm package${occ > 1 ? "s" : ""}`, effort: "1–4 hours", impact: "Avoid unmaintained/vulnerable deps" });
+        break;
+    }
+  }
+  return { quickWins: quickWins.slice(0, 4), largerEfforts: largerEfforts.slice(0, 4) };
+}
+
+const EFFORT_ESTIMATES: Record<string, { min: number; max: number }> = {
+  "PW-FLAKE-001": { min: 1, max: 4 }, "PW-FLAKE-002": { min: 0.5, max: 2 },
+  "CY-FLAKE-003": { min: 0.5, max: 2 }, "PW-LOC-001": { min: 1, max: 4 },
+  "PW-STABILITY-001": { min: 2, max: 4 }, "PW-STABILITY-001a": { min: 0.5, max: 1 },
+  "PW-STABILITY-003": { min: 2, max: 6 }, "CI-005": { min: 0.5, max: 1 },
+  "CI-006": { min: 0.5, max: 1 }, "CI-007": { min: 2, max: 4 },
+  "PW-INSIGHT-001": { min: 2, max: 6 }, "PW-INSIGHT-002": { min: 0.25, max: 0.5 },
+  "PW-INSIGHT-003": { min: 4, max: 8 }, "ARCH-001": { min: 2, max: 4 },
+  "ARCH-002": { min: 1, max: 4 }, "ARCH-003": { min: 2, max: 4 },
+  "ARCH-004": { min: 1, max: 2 }, "ARCH-005": { min: 0.5, max: 1 },
+  "ARCH-005a": { min: 1, max: 3 }, "ARCH-006": { min: 4, max: 8 },
+  "ARCH-007": { min: 2, max: 4 }, "ARCH-008": { min: 1, max: 3 },
+  "ARCH-009": { min: 0.5, max: 2 }, "PW-FLAKE-003": { min: 0.5, max: 1 },
+  "PW-FLAKE-004": { min: 1, max: 3 }, "PW-STABILITY-004": { min: 2, max: 6 },
+  "PW-LOC-002": { min: 1, max: 3 }, "PW-LOC-003": { min: 0.5, max: 2 },
+  "PW-PERF-003": { min: 1, max: 3 }, "CI-011": { min: 0.25, max: 0.5 },
+  "CI-012": { min: 0.25, max: 0.5 }, "CI-013": { min: 0.25, max: 0.5 },
+  "CI-014": { min: 0.25, max: 0.5 }, "DEP-001": { min: 1, max: 4 },
+  "DEP-002": { min: 1, max: 4 },
+};
+
+function calculateRemediationTime(findings: Finding[]): TimeEstimate {
+  let toGoodMin = 0, toGoodMax = 0, toAllMin = 0, toAllMax = 0;
+  const high = findings.filter(f => f.severity === "high");
+
+  for (const f of high) {
+    const est = EFFORT_ESTIMATES[f.finding_id] ?? { min: 1, max: 3 };
+    const fc = new Set(f.evidence.map(e => e.file)).size;
+    const scale = Math.min(Math.max(1, fc / 3), 3);
+    toGoodMin += est.min * scale; toGoodMax += est.max * scale;
+  }
+  for (const f of findings) {
+    const est = EFFORT_ESTIMATES[f.finding_id] ?? { min: 1, max: 3 };
+    const fc = new Set(f.evidence.map(e => e.file)).size;
+    const scale = Math.min(Math.max(1, fc / 3), 3);
+    toAllMin += est.min * scale; toAllMax += est.max * scale;
+  }
+  return {
+    toGoodGrade: { minHours: Math.round(toGoodMin), maxHours: Math.round(toGoodMax) },
+    toAllResolved: { minHours: Math.round(toAllMin), maxHours: Math.round(toAllMax) },
+    highPriorityCount: high.length,
+    totalIssueCount: findings.length,
+  };
+}
+
+function formatTimeRange(min: number, max: number): string {
+  if (min === 0 && max === 0) return "No remediation needed";
+  if (max <= 4) return `${min}–${max} hours`;
+  if (max <= 16) return `${Math.round(min / 4)}–${Math.round(max / 4)} half-days`;
+  return `${Math.round(min / 8)}–${Math.round(max / 8)} days`;
 }
 
 function topEvidenceFile(f: Finding): { name: string; count: number } | null {
@@ -831,6 +971,147 @@ export default function RepoDetailPage() {
             )}
           </div>
         ) : null;
+      })()}
+
+      {/* ── Effort Estimation & Remediation Time ── */}
+      {(() => {
+        const { quickWins, largerEfforts } = categorizeFindings(findings);
+        const timeEst = calculateRemediationTime(findings);
+        const hasEffortData = quickWins.length > 0 || largerEfforts.length > 0;
+
+        if (!hasEffortData && timeEst.totalIssueCount === 0) return null;
+
+        return (
+          <div className="grid gap-4 lg:grid-cols-2">
+            {/* Effort Estimation */}
+            {hasEffortData && (
+              <Card>
+                <CardHeader className="flex flex-row items-center gap-3 pb-4">
+                  <Wrench className="h-5 w-5 text-amber-400" />
+                  <div>
+                    <CardTitle className="text-lg">Effort Estimation</CardTitle>
+                    <CardDescription>Quick wins vs strategic improvements</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-5">
+                  {quickWins.length > 0 && (
+                    <div>
+                      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-emerald-400 mb-3">
+                        <Zap className="h-3.5 w-3.5" />
+                        Quick Wins <span className="text-muted-foreground font-normal normal-case">(&#60; 2 hours each)</span>
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border/40">
+                              <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground">Action Item</th>
+                              <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground w-28">Time Est.</th>
+                              <th className="text-left py-1.5 text-xs font-medium text-muted-foreground w-40">Impact</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {quickWins.map((qw, i) => (
+                              <tr key={i} className="border-b border-border/20 last:border-0">
+                                <td className="py-2 pr-3 text-foreground/80">{qw.finding}</td>
+                                <td className="py-2 pr-3 font-mono text-xs text-emerald-400">{qw.effort}</td>
+                                <td className="py-2 text-xs text-muted-foreground">{qw.impact}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  {largerEfforts.length > 0 && (
+                    <div>
+                      <h4 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-blue-400 mb-3">
+                        <TrendingDown className="h-3.5 w-3.5" />
+                        Strategic Improvements <span className="text-muted-foreground font-normal normal-case">(half-day to multi-day)</span>
+                      </h4>
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border/40">
+                              <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground">Action Item</th>
+                              <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground w-28">Time Est.</th>
+                              <th className="text-left py-1.5 text-xs font-medium text-muted-foreground w-40">Impact</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {largerEfforts.map((le, i) => (
+                              <tr key={i} className="border-b border-border/20 last:border-0">
+                                <td className="py-2 pr-3 text-foreground/80">{le.finding}</td>
+                                <td className="py-2 pr-3 font-mono text-xs text-blue-400">{le.effort}</td>
+                                <td className="py-2 text-xs text-muted-foreground">{le.impact}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Remediation Time Summary */}
+            <Card>
+              <CardHeader className="flex flex-row items-center gap-3 pb-4">
+                <Hourglass className="h-5 w-5 text-primary" />
+                <div>
+                  <CardTitle className="text-lg">Remediation Time Summary</CardTitle>
+                  <CardDescription>Estimated engineering effort to improve</CardDescription>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border/40">
+                        <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground">Target</th>
+                        <th className="text-left py-1.5 pr-3 text-xs font-medium text-muted-foreground w-36">Estimated Time</th>
+                        <th className="text-left py-1.5 text-xs font-medium text-muted-foreground">Scope</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {grade !== "A" && grade !== "B" && timeEst.highPriorityCount > 0 && (
+                        <tr className="border-b border-border/20">
+                          <td className="py-2.5 pr-3 font-medium text-foreground/90">Reach Grade B (Good)</td>
+                          <td className="py-2.5 pr-3">
+                            <span className="inline-flex items-center gap-1.5 rounded-md bg-amber-500/10 px-2 py-0.5 text-xs font-mono font-medium text-amber-400">
+                              <Clock className="h-3 w-3" />
+                              {formatTimeRange(timeEst.toGoodGrade.minHours, timeEst.toGoodGrade.maxHours)}
+                            </span>
+                          </td>
+                          <td className="py-2.5 text-xs text-muted-foreground">
+                            Address {timeEst.highPriorityCount} high-severity finding{timeEst.highPriorityCount !== 1 ? "s" : ""}
+                          </td>
+                        </tr>
+                      )}
+                      <tr className="border-b border-border/20 last:border-0">
+                        <td className="py-2.5 pr-3 font-medium text-foreground/90">Address All Issues</td>
+                        <td className="py-2.5 pr-3">
+                          <span className="inline-flex items-center gap-1.5 rounded-md bg-primary/10 px-2 py-0.5 text-xs font-mono font-medium text-primary">
+                            <Clock className="h-3 w-3" />
+                            {formatTimeRange(timeEst.toAllResolved.minHours, timeEst.toAllResolved.maxHours)}
+                          </span>
+                        </td>
+                        <td className="py-2.5 text-xs text-muted-foreground">
+                          Resolve all {timeEst.totalIssueCount} finding{timeEst.totalIssueCount !== 1 ? "s" : ""}
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="text-[11px] text-muted-foreground/60 italic leading-relaxed">
+                  Time estimates assume a single engineer familiar with the codebase. Actual time may vary based on complexity and team experience.
+                </p>
+              </CardContent>
+            </Card>
+          </div>
+        );
       })()}
 
       {/* ── Findings Table ── */}
