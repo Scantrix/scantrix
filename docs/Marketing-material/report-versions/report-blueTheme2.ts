@@ -1,8 +1,8 @@
 import fs from "fs/promises";
 import path from "path";
 import MarkdownIt from "markdown-it";
-import type { ScanResults } from "../../src/scanner";
-import type { PlaywrightConfigSummary } from "../../src/configExtractor";
+import type { ScanResults } from "../../../src/scanner";
+import type { PlaywrightConfigSummary } from "../../../src/configExtractor";
 
 function severityScore(sev: "low" | "medium" | "high") {
   return sev === "high" ? 3 : sev === "medium" ? 2 : 1;

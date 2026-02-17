@@ -8,5 +8,5 @@
     "esModuleInterop": true,
     "skipLibCheck": true
   },
-  "include": ["src/**/*.ts", "Marketing-material/report-versions/report.ts", ]
+  "include": ["src/**/*.ts", "docs/Marketing-material/report-versions/report.ts", ]
 }
