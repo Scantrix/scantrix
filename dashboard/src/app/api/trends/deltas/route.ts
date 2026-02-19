@@ -28,6 +28,12 @@ interface DeltaEntry {
   new_high: number;
   new_medium: number;
   new_low: number;
+  /** Findings that existed in both scans but were promoted TO high */
+  promoted_to_high: number;
+  /** Findings that existed in both scans but were demoted FROM high */
+  demoted_from_high: number;
+  /** Findings that changed severity (any direction) */
+  severity_changes: number;
 }
 
 function countSev(rows: FindingRow[], severity: string): number {
@@ -37,7 +43,7 @@ function countSev(rows: FindingRow[], severity: string): number {
 function computeDeltas(scans: ScanRow[], findingsStmt: any): DeltaEntry[] {
   return scans.map((scan, idx) => {
     const curr = findingsStmt.all(scan.id) as FindingRow[];
-    const currIds = new Set(curr.map((f) => f.finding_id));
+    const currMap = new Map(curr.map((f) => [f.finding_id, f]));
 
     if (idx === 0) {
       return {
@@ -49,14 +55,34 @@ function computeDeltas(scans: ScanRow[], findingsStmt: any): DeltaEntry[] {
         new_high: 0,
         new_medium: 0,
         new_low: 0,
+        promoted_to_high: 0,
+        demoted_from_high: 0,
+        severity_changes: 0,
       };
     }
 
     const prev = findingsStmt.all(scans[idx - 1].id) as FindingRow[];
-    const prevIds = new Set(prev.map((f) => f.finding_id));
+    const prevMap = new Map(prev.map((f) => [f.finding_id, f]));
 
-    const resolved = prev.filter((f) => !currIds.has(f.finding_id));
-    const introduced = curr.filter((f) => !prevIds.has(f.finding_id));
+    const resolved = prev.filter((f) => !currMap.has(f.finding_id));
+    const introduced = curr.filter((f) => !prevMap.has(f.finding_id));
+
+    // Detect severity changes for findings that exist in both scans
+    let promoted_to_high = 0;
+    let demoted_from_high = 0;
+    let severity_changes = 0;
+    for (const [fid, currFinding] of currMap) {
+      const prevFinding = prevMap.get(fid);
+      if (prevFinding && prevFinding.severity !== currFinding.severity) {
+        severity_changes++;
+        if (currFinding.severity === "high" && prevFinding.severity !== "high") {
+          promoted_to_high++;
+        }
+        if (prevFinding.severity === "high" && currFinding.severity !== "high") {
+          demoted_from_high++;
+        }
+      }
+    }
 
     return {
       scanned_at: scan.scanned_at,
@@ -67,6 +93,9 @@ function computeDeltas(scans: ScanRow[], findingsStmt: any): DeltaEntry[] {
       new_high: countSev(introduced, "high"),
       new_medium: countSev(introduced, "medium"),
       new_low: countSev(introduced, "low"),
+      promoted_to_high,
+      demoted_from_high,
+      severity_changes,
     };
   });
 }
@@ -125,6 +154,9 @@ export async function GET(request: NextRequest) {
             new_high: 0,
             new_medium: 0,
             new_low: 0,
+            promoted_to_high: 0,
+            demoted_from_high: 0,
+            severity_changes: 0,
           });
         }
         const a = aggByDate.get(d.date)!;
@@ -134,6 +166,9 @@ export async function GET(request: NextRequest) {
         a.new_high += d.new_high;
         a.new_medium += d.new_medium;
         a.new_low += d.new_low;
+        a.promoted_to_high += d.promoted_to_high;
+        a.demoted_from_high += d.demoted_from_high;
+        a.severity_changes += d.severity_changes;
       }
     }
 

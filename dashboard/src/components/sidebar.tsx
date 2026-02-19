@@ -40,8 +40,8 @@ export default function Sidebar() {
       <div className="flex h-16 items-center gap-3 border-b border-border/40 px-4">
         <Link href="/" className="flex items-center gap-3 overflow-hidden">
           <img
-            src="/assets/qaverity-logo-wide.svg"
-            alt="QAVERITY"
+            src="/assets/scantrix-logo.svg"
+            alt="SCANTRIX"
             className={cn(
               "h-8 w-auto shrink-0 transition-transform hover:scale-105",
               collapsed && "hidden",
@@ -49,8 +49,8 @@ export default function Sidebar() {
           />
           {collapsed && (
             <img
-              src="/assets/qaverityLogo.png"
-              alt="Q"
+              src="/assets/scantrix-logo.svg"
+              alt="SCANTRIX"
               className="h-8 w-8 shrink-0 rounded transition-transform hover:scale-105"
             />
           )}

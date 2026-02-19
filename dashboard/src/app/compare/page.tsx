@@ -8,8 +8,9 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
 import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell,
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Cell,
 } from "recharts";
+import { SafeChart } from "@/components/safe-chart";
 import {
   ArrowDown, ArrowUp, ArrowRight, Star,
   GitCompare, TrendingDown, TrendingUp, Award,
@@ -219,7 +220,7 @@ export default function ComparePage() {
               <CardTitle className="text-lg">Risk Score Comparison</CardTitle>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={Math.max(200, sorted.length * 48)}>
+              <SafeChart height={Math.max(200, sorted.length * 48)}>
                 <BarChart data={sorted} layout="vertical" barSize={20}>
                   <CartesianGrid strokeDasharray="3 3" horizontal={false} />
                   <XAxis type="number" tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
@@ -245,7 +246,7 @@ export default function ComparePage() {
                     ))}
                   </Bar>
                 </BarChart>
-              </ResponsiveContainer>
+              </SafeChart>
             </CardContent>
           </Card>
         </>

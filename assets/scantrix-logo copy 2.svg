@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="55 57 475 123" width="960" height="248">
+  <defs>
+    <linearGradient id="shieldGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1d3263"/>
+      <stop offset="50%" style="stop-color:#152850"/>
+      <stop offset="100%" style="stop-color:#1d3d84"/>
+    </linearGradient>
+    <linearGradient id="accentGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4c79f6"/>
+      <stop offset="100%" style="stop-color:#6e9cf9"/>
+    </linearGradient>
+    <linearGradient id="scanGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#4c79f6;stop-opacity:0"/>
+      <stop offset="50%" style="stop-color:#6e9cf9;stop-opacity:1"/>
+      <stop offset="100%" style="stop-color:#4c79f6;stop-opacity:0"/>
+    </linearGradient>
+    <filter id="glow2">
+      <feGaussianBlur stdDeviation="2" result="blur"/>
+      <feMerge>
+        <feMergeNode in="blur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+    <filter id="shadow2">
+      <feDropShadow dx="0" dy="2" stdDeviation="4" flood-color="#000" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+
+  <!-- === Text === -->
+  <g transform="translate(0, 1) scale(1.3)" filter="url(#shadow2)">
+    <!-- "REPO AUDIT" - main title -->
+    <text x="50" y="100" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="66" fill="#e2e8f0" letter-spacing="4">
+      SC
+    </text>
+    <text x="140" y="100" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-weight="800" font-size="68" fill="#4c79f6" letter-spacing="4">
+      &#923;
+    </text>
+    <text x="190" y="100" font-family="'Roboto', 'Helvetica Neue', Arial, sans-serif" font-weight="700" font-size="66" fill="#e2e8f0" letter-spacing="4">
+      NTRIX
+    </text>
+    <!-- dot over the "i" -->
+    <circle cx="398" cy="70" r="7" fill="#4c79f6" opacity="0.0"/>
+
+     <!-- Decorative accent line -->
+    <rect x="50" y="110" width="348" height="2" rx="1" fill="#a4bcff" textLength="348" opacity="0.9"/>
+
+    <!-- Tagline -->
+    <text x="51" y="125" font-family="'Inter', 'Helvetica Neue', Arial, sans-serif" font-weight="600" font-size="" fill="#4c79f6" letter-spacing="1" textLength="348" lengthAdjust="spacing">
+      AUTOMATION FRAMEWORK DIAGNOSTICS
+    </text>
+  </g>
+</svg>
+

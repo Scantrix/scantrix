@@ -1,5 +1,6 @@
 "use client";
 
+import React from "react";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
@@ -8,6 +9,18 @@ import { Badge } from "@/components/ui/badge";
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from "@/components/ui/table";
+
+/** Convert plain-text URLs inside a string into clickable <a> elements. */
+function linkifyText(text: string): React.ReactNode {
+  const urlRegex = /(https?:\/\/[^\s<>"]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length === 1) return text;
+  return parts.map((part, i) =>
+    urlRegex.test(part)
+      ? React.createElement("a", { key: i, href: part, target: "_blank", rel: "noopener noreferrer", className: "text-blue-400 underline hover:text-blue-300 break-all" }, part)
+      : part
+  );
+}
 import {
   ArrowLeft, ShieldCheck, AlertTriangle, Info, FileWarning,
   Clock, ChevronDown, ChevronRight, Settings, GitBranch, Monitor,
@@ -556,13 +569,13 @@ function FindingRow({ f }: { f: Finding }) {
               {f.description && (
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Description</h4>
-                  <p className="text-sm text-foreground/80">{f.description}</p>
+                  <p className="text-sm text-foreground/80">{linkifyText(f.description)}</p>
                 </div>
               )}
               {f.recommendation && (
                 <div>
                   <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-1">Recommendation</h4>
-                  <p className="text-sm text-foreground/80">{f.recommendation}</p>
+                  <p className="text-sm text-foreground/80 whitespace-pre-line">{linkifyText(f.recommendation)}</p>
                 </div>
               )}
               {f.evidence.length > 0 && (
@@ -693,7 +706,16 @@ export default function RepoDetailPage() {
               />
             </div>
           </CardContent>
-          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
+          <div
+            className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${
+              grade === "A" ? "from-emerald-500/80 via-emerald-500/40 to-transparent"
+              : grade === "B" ? "from-blue-500/80 via-blue-500/40 to-transparent"
+              : grade === "C" ? "from-amber-500/80 via-amber-500/40 to-transparent"
+              : grade === "D" ? "from-orange-500/80 via-orange-500/40 to-transparent"
+              : grade === "F" ? "from-red-500/80 via-red-500/40 to-transparent"
+              : "from-muted-foreground/40 via-muted-foreground/20 to-transparent"
+            }`}
+          />
         </Card>
 
         {/* Total Findings */}
@@ -705,7 +727,7 @@ export default function RepoDetailPage() {
           <CardContent>
             <div className="text-3xl font-bold text-blue-400">{latestScan?.findings_count ?? 0}</div>
           </CardContent>
-          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-blue-500/80 via-blue-500/40 to-transparent" />
         </Card>
 
         {/* High Severity */}
@@ -717,7 +739,7 @@ export default function RepoDetailPage() {
           <CardContent>
             <div className="text-3xl font-bold text-red-400">{latestScan?.high_count ?? 0}</div>
           </CardContent>
-          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-red-500/80 via-red-500/40 to-transparent" />
         </Card>
 
         {/* Scans */}
@@ -729,7 +751,7 @@ export default function RepoDetailPage() {
           <CardContent>
             <div className="text-3xl font-bold text-primary">{scanHistory.length}</div>
           </CardContent>
-          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary/60 via-primary/30 to-transparent" />
+          <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-primary/80 via-primary/40 to-transparent" />
         </Card>
       </div>
 

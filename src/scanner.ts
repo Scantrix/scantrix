@@ -1162,7 +1162,30 @@ function analyzeErrorHandling(filePath: string, content: string): ErrorHandlingA
 
 export async function scanRepo(repoPath: string, options: ScanOptions = {}): Promise<ScanResults> {
   if (!existsSync(repoPath)) {
-    throw new Error(`Repo path does not exist: ${repoPath}`);
+    console.warn(`[audit] Repo path does not exist: ${repoPath} — producing empty scan result.`);
+    const repoName = path.basename(path.resolve(repoPath));
+    return {
+      repoPath,
+      inventory: {
+        totalFiles: 0,
+        testFiles: 0,
+        hasPlaywrightConfig: false,
+        playwrightVersion: null,
+        detectedFrameworks: [],
+      },
+      findings: [
+        {
+          findingId: "SCAN-MISSING-REPO",
+          severity: "high",
+          title: "Repository path not found",
+          description: `The target repository path "${repoPath}" does not exist. This may indicate the repo was moved or deleted. No files were scanned.`,
+          recommendation: "Verify that the repository path is correct and accessible, then re-run the audit.",
+          evidence: [],
+        },
+      ],
+      gitBranch: undefined,
+      gitCommit: undefined,
+    };
   }
 
   const git = getGitInfo(repoPath);

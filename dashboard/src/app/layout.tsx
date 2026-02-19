@@ -1,16 +1,30 @@
 import type { Metadata } from "next";
+import { IBM_Plex_Sans, Sora } from "next/font/google";
 import "./globals.css";
 import Sidebar from "@/components/sidebar";
 
+const sora = Sora({
+  subsets: ["latin"],
+  variable: "--font-sora",
+  display: "swap",
+});
+
+const plex = IBM_Plex_Sans({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--font-plex",
+  display: "swap",
+});
+
 export const metadata: Metadata = {
-  title: "QAVERITY Dashboard",
+  title: "Scantrix Dashboard",
   description: "Test Automation Intelligence — Historical audit results, trending risk scores, repo comparison",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark">
-      <body className="min-h-screen bg-background antialiased">
+      <body className={`min-h-screen bg-background antialiased ${sora.variable} ${plex.variable}`}>
         <div className="flex">
           {/* ── Sidebar navigation ── */}
           <Sidebar />

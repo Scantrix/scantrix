@@ -11,6 +11,9 @@ export async function GET(_request: NextRequest) {
     const repos = db
       .prepare(
         `SELECT r.*,
+          (
+            SELECT COUNT(*) FROM scans WHERE repo_id = r.id
+          ) as scan_count,
                 s.id as last_scan_id,
                 s.scanned_at as last_scanned_at,
                 s.findings_count,

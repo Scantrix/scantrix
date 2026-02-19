@@ -1,5 +1,66 @@
 # Changelog
 
+## [4.3.0] - 2026-02-19
+
+### Bug Fixes & Data Integrity — Missing Repo Handling, Linkified URLs, Aggregate Trend Accuracy
+
+---
+
+### 🛡️ Graceful Handling of Missing Repository Paths
+
+`scanRepo()` no longer throws when the target repository folder has been deleted or moved.
+Instead it returns an empty inventory with a single `SCAN-MISSING-REPO` high-severity finding,
+allowing the full report/snapshot/push pipeline to proceed. This ensures re-scanning a previously
+tracked repo adds a new scan entry to the existing dashboard record rather than crashing.
+
+- **Changed:** `src/scanner.ts` — replaced `throw` with graceful empty result + warning finding
+- **Added:** 3 new tests in `tests/scanner.test.ts` covering the missing-repo path
+
+### 🔗 Clickable URLs in Dashboard Findings
+
+Recommendation and description text in the dashboard findings panel now auto-linkifies URLs
+(e.g. Playwright doc links) into clickable `<a>` tags that open in a new tab.
+
+- **Changed:** `dashboard/src/app/repos/[name]/page.tsx` — added `linkifyText()` helper,
+  applied to recommendation and description fields with `whitespace-pre-line` for proper
+  line-break rendering
+
+### 📊 Fixed Aggregate Risk Trend Calculation
+
+The main dashboard "Risk Trend" chart was computing `AVG(risk_score)` only over scans that
+occurred on each specific date. When only one repo was scanned on a given day, the aggregate
+average reflected only that repo's score — not the portfolio. This caused false spikes/dips
+(e.g. a score of 83 when 9 other repos with lower scores were omitted).
+
+**Root cause:** `GROUP BY date(scanned_at)` with `AVG()` ignores repos not scanned that day.
+
+**Fix:** The `/api/trends` aggregate endpoint now computes a **rolling portfolio state** —
+processing all scans chronologically, maintaining each repo's latest known score, and
+outputting the portfolio-wide average at each date. Re-scanning one repo no longer distorts
+the aggregate; all other repos' last-known scores are always included.
+
+- **Changed:** `dashboard/src/app/api/trends/route.ts` — rewrote aggregate branch with
+  rolling latest-per-repo logic
+
+### 📅 Fixed Timezone-Shifted Date Labels on Trends Page
+
+X-axis labels and tooltips on the Trends page (Findings Over Time, Resolved vs Introduced,
+Risk Score Trajectory, Scan History) were showing dates shifted one day earlier than the
+actual scan date when viewed in US timezones.
+
+**Root cause:** Date-only strings like `"2026-02-19"` are parsed by `new Date()` as UTC
+midnight. Converting to local time in timezones behind UTC (e.g. EST, PST) shifts the
+displayed day back by one (Feb 19 UTC → Feb 18 local).
+
+**Fix:** Date-only strings now have `T12:00:00` appended before parsing, forcing local-noon
+interpretation and ensuring the displayed date matches the actual scan date regardless
+of timezone.
+
+- **Changed:** `dashboard/src/app/trends/page.tsx` — fixed date parsing in both trend data
+  and delta data mapping functions
+
+---
+
 ## [4.2.0] - 2026-02-15
 
 ### Dashboard UX Overhaul — Repo Detail Page, Sidebar Navigation & Inventory Pipeline

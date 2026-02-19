@@ -50,11 +50,17 @@
   }
   body {
     @apply bg-background text-foreground;
-    font-family: "Inter", "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family: var(--font-plex), "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
+
+  h1, h2, h3, h4, .title-font {
+    font-family: var(--font-sora), "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif;
+    letter-spacing: -0.015em;
+  }
 }
+
 
 /* ── Recharts overrides for dark theme ── */
 .recharts-cartesian-grid line {

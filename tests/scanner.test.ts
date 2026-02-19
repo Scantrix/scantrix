@@ -229,3 +229,29 @@ describe("auditrc filtering", () => {
     if (f) expect(f.severity).toBe("low");
   });
 });
+
+// ─── Missing repo path: should return empty result, not throw ────────
+describe("missing repo path", () => {
+  let results: ScanResults;
+
+  beforeAll(async () => {
+    results = await scanRepo(path.join(FIXTURES, "nonexistent-repo"));
+  });
+
+  it("returns a result instead of throwing", () => {
+    expect(results).toBeDefined();
+  });
+
+  it("produces SCAN-MISSING-REPO finding", () => {
+    expect(hasFinding(results, "SCAN-MISSING-REPO")).toBe(true);
+    const f = getFinding(results, "SCAN-MISSING-REPO")!;
+    expect(f.severity).toBe("high");
+    expect(f.description).toContain("does not exist");
+  });
+
+  it("has empty inventory", () => {
+    expect(results.inventory.totalFiles).toBe(0);
+    expect(results.inventory.testFiles).toBe(0);
+    expect(results.inventory.hasPlaywrightConfig).toBe(false);
+  });
+});

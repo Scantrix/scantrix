@@ -11,8 +11,9 @@ import {
 } from "@/components/ui/select";
 import {
   BarChart, Bar, AreaChart, Area, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Legend, ComposedChart, PieChart, Pie, Cell,
+  Tooltip, Legend, ComposedChart, PieChart, Pie, Cell,
 } from "recharts";
+import { SafeChart } from "@/components/safe-chart";
 import {
   TrendingUp, TrendingDown, Minus, BarChart3,
   ShieldCheck, AlertTriangle, Activity, Target,
@@ -55,6 +56,9 @@ interface DeltaPoint {
   new_high: number;
   new_medium: number;
   new_low: number;
+  promoted_to_high: number;
+  demoted_from_high: number;
+  severity_changes: number;
 }
 
 /* ─────────────────── Helpers ─────────────────── */
@@ -131,6 +135,21 @@ function DeltaTooltip({ active, payload }: any) {
             </p>
           )}
         </div>
+        {(d.promoted_to_high > 0 || d.demoted_from_high > 0) && (
+          <div>
+            <p className="text-xs font-semibold text-amber-400">⇅ Severity Changes</p>
+            {d.promoted_to_high > 0 && (
+              <p className="ml-3 text-[11px] text-muted-foreground">
+                {d.promoted_to_high} promoted to high
+              </p>
+            )}
+            {d.demoted_from_high > 0 && (
+              <p className="ml-3 text-[11px] text-muted-foreground">
+                {d.demoted_from_high} demoted from high
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -158,7 +177,7 @@ function SeverityDonut({ high, medium, low, compact = false }: { high: number; m
 
   return (
     <div className="relative">
-      <ResponsiveContainer width="100%" height={h}>
+      <SafeChart height={h}>
         <PieChart>
           <Pie
             data={data}
@@ -176,7 +195,7 @@ function SeverityDonut({ high, medium, low, compact = false }: { high: number; m
           </Pie>
           <Tooltip content={<ChartTooltip />} />
         </PieChart>
-      </ResponsiveContainer>
+      </SafeChart>
       {/* Center label */}
       <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
         <span className={`${compact ? "text-base" : "text-2xl"} font-bold`}>{total}</span>
@@ -235,9 +254,12 @@ export default function TrendsPage() {
           const dateStr = r.date as string;
           const key = ts ?? dateStr; // unique identity
           // Format label: "Feb 14 17:03" for per-repo, "Feb 14" for aggregate
+          // Note: date-only strings like "2026-02-19" are parsed as UTC midnight
+          // by new Date(), which shifts to the previous day in US timezones.
+          // Append T12:00:00 to force local-noon interpretation.
           let label = dateStr;
           try {
-            const d = new Date(ts ?? dateStr);
+            const d = ts ? new Date(ts) : new Date(dateStr + "T12:00:00");
             label = ts
               ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
               : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
@@ -280,7 +302,7 @@ export default function TrendsPage() {
             const key = ts ?? dateStr;
             let label = dateStr;
             try {
-              const d = new Date(ts ?? dateStr);
+              const d = ts ? new Date(ts) : new Date(dateStr + "T12:00:00");
               label = ts
                 ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
                   " " +
@@ -299,6 +321,9 @@ export default function TrendsPage() {
               new_high: r.new_high ?? 0,
               new_medium: r.new_medium ?? 0,
               new_low: r.new_low ?? 0,
+              promoted_to_high: r.promoted_to_high ?? 0,
+              demoted_from_high: r.demoted_from_high ?? 0,
+              severity_changes: r.severity_changes ?? 0,
             };
           }),
         );
@@ -309,7 +334,7 @@ export default function TrendsPage() {
   /* ── Computed KPIs ── */
   const kpis = useMemo(() => {
     if (trendData.length === 0)
-      return { scans: 0, grade: "—", score: 0, scoreDelta: 0, highDelta: 0, findingsDelta: 0, velocity: 0 };
+      return { scans: 0, grade: "—", score: 0, scoreDelta: 0, highDelta: 0, findingsDelta: 0, highSinceFirst: 0, velocity: 0 };
 
     const latest = trendData[trendData.length - 1];
     const prev = trendData.length >= 2 ? trendData[trendData.length - 2] : latest;
@@ -324,11 +349,25 @@ export default function TrendsPage() {
       scoreDelta: Math.round((latest.risk_score - prev.risk_score) * 10) / 10,
       highDelta: latest.high_count - prev.high_count,
       findingsDelta: latest.findings_count - first.findings_count,
+      highSinceFirst: latest.high_count - first.high_count,
       velocity: avgFindings,
     };
   }, [trendData]);
 
   const latestPoint = trendData.length > 0 ? trendData[trendData.length - 1] : null;
+
+  /* ── Build key→label lookup maps for tick formatting ── */
+  const trendLabelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const t of trendData) m.set(t.key, t.label);
+    return m;
+  }, [trendData]);
+
+  const deltaLabelMap = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const d of deltaData) m.set(d.key, d.label);
+    return m;
+  }, [deltaData]);
 
   /* ── Reversed data for table (newest first) with deltas ── */
   const tableRows = useMemo(() => {
@@ -408,7 +447,13 @@ export default function TrendsPage() {
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">latest risk score</p>
               </CardContent>
-              <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-emerald-500/40 via-emerald-500/15 to-transparent" />
+              <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r to-transparent ${
+                kpis.grade === "A" ? "from-emerald-500/40 via-emerald-500/15"
+                : kpis.grade === "B" ? "from-blue-400/40 via-blue-400/15"
+                : kpis.grade === "C" ? "from-amber-400/40 via-amber-400/15"
+                : kpis.grade === "D" ? "from-orange-400/40 via-orange-400/15"
+                : "from-red-400/40 via-red-400/15"
+              }`} />
             </Card>
 
             {/* Risk Δ */}
@@ -439,7 +484,7 @@ export default function TrendsPage() {
                 <div className={`text-3xl font-bold ${kpis.highDelta <= 0 ? "text-emerald-400" : "text-red-400"}`}>
                   {kpis.highDelta > 0 ? "+" : ""}{kpis.highDelta}
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">high findings vs. previous</p>
+                <p className="mt-1 text-xs text-muted-foreground">high findings vs. previous (incl. severity changes)</p>
               </CardContent>
               <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${kpis.highDelta <= 0 ? "from-emerald-500/40 via-emerald-500/15" : "from-red-500/40 via-red-500/15"} to-transparent`} />
             </Card>
@@ -453,7 +498,7 @@ export default function TrendsPage() {
                 <CardTitle className="text-lg">Findings Over Time</CardTitle>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={320}>
+                <SafeChart height={320}>
                   <ComposedChart data={trendData} barCategoryGap="12%">
                     <defs>
                       <linearGradient id="highGrad" x1="0" y1="0" x2="0" y2="1">
@@ -471,7 +516,7 @@ export default function TrendsPage() {
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} />
                     <XAxis dataKey="key" tick={{ fontSize: 11 }} tickLine={false} axisLine={false}
-                      tickFormatter={(_, idx) => trendData[idx]?.label ?? ""} />
+                      tickFormatter={(value) => trendLabelMap.get(value) ?? String(value)} />
                     <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                     <Tooltip content={<ChartTooltip />} labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""} />
                     <Legend iconType="circle" iconSize={8} />
@@ -479,7 +524,7 @@ export default function TrendsPage() {
                     <Bar dataKey="medium_count" name="Medium" stackId="sev" fill="url(#medGrad)"  radius={[0, 0, 0, 0]} />
                     <Bar dataKey="low_count"    name="Low"    stackId="sev" fill="url(#lowGrad)"  radius={[3, 3, 0, 0]} />
                   </ComposedChart>
-                </ResponsiveContainer>
+                </SafeChart>
               </CardContent>
             </Card>
 
@@ -526,7 +571,7 @@ export default function TrendsPage() {
                   <CardTitle className="text-sm font-medium">Resolved vs Introduced</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <ResponsiveContainer width="100%" height={200}>
+                  <SafeChart height={200}>
                     <ComposedChart data={deltaData} barCategoryGap="18%">
                       <defs>
                         <linearGradient id="resolvedGrad" x1="0" y1="0" x2="0" y2="1">
@@ -537,17 +582,22 @@ export default function TrendsPage() {
                           <stop offset="0%" stopColor="hsl(0 84% 60%)" stopOpacity={0.9} />
                           <stop offset="100%" stopColor="hsl(0 84% 60%)" stopOpacity={0.5} />
                         </linearGradient>
+                        <linearGradient id="severityChangeGrad" x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor="hsl(45 93% 56%)" stopOpacity={0.9} />
+                          <stop offset="100%" stopColor="hsl(45 93% 56%)" stopOpacity={0.5} />
+                        </linearGradient>
                       </defs>
                       <CartesianGrid strokeDasharray="3 3" vertical={false} />
                       <XAxis dataKey="key" tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
-                        tickFormatter={(_, idx) => deltaData[idx]?.label ?? ""} />
+                        tickFormatter={(value) => deltaLabelMap.get(value) ?? String(value)} />
                       <YAxis tick={{ fontSize: 10 }} tickLine={false} axisLine={false} allowDecimals={false} />
                       <Tooltip content={<DeltaTooltip />} />
                       <Legend iconType="circle" iconSize={7} wrapperStyle={{ fontSize: 11 }} />
                       <Bar dataKey="resolved" name="Resolved" fill="url(#resolvedGrad)" radius={[3, 3, 0, 0]} />
                       <Bar dataKey="introduced" name="Introduced" fill="url(#introducedGrad)" radius={[3, 3, 0, 0]} />
+                      <Bar dataKey="severity_changes" name="Sev. Changed" fill="url(#severityChangeGrad)" radius={[3, 3, 0, 0]} />
                     </ComposedChart>
-                  </ResponsiveContainer>
+                  </SafeChart>
                 </CardContent>
               </Card>
             </div>
@@ -558,15 +608,24 @@ export default function TrendsPage() {
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle className="text-lg">Risk Score Trajectory</CardTitle>
               {trendData.length >= 2 && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-muted-foreground">Overall:</span>
-                  <DeltaChip value={kpis.findingsDelta} invert />
-                  <span className="text-xs text-muted-foreground">findings since first scan</span>
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Total:</span>
+                    <DeltaChip value={kpis.findingsDelta} invert />
+                    <span className="text-xs text-muted-foreground">findings since first scan</span>
+                  </div>
+                  {kpis.highSinceFirst !== 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">High:</span>
+                      <DeltaChip value={kpis.highSinceFirst} invert />
+                      <span className="text-xs text-muted-foreground">since first scan</span>
+                    </div>
+                  )}
                 </div>
               )}
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={280}>
+              <SafeChart height={280}>
                 <AreaChart data={trendData}>
                   <defs>
                     <linearGradient id="riskGrad" x1="0" y1="0" x2="0" y2="1">
@@ -576,7 +635,7 @@ export default function TrendsPage() {
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} />
                   <XAxis dataKey="key" tick={{ fontSize: 11 }} tickLine={false} axisLine={false}
-                    tickFormatter={(_, idx) => trendData[idx]?.label ?? ""} />
+                    tickFormatter={(value) => trendLabelMap.get(value) ?? String(value)} />
                   <YAxis tick={{ fontSize: 11 }} tickLine={false} axisLine={false} />
                   <Tooltip content={<ChartTooltip />} labelFormatter={(_, payload) => payload?.[0]?.payload?.label ?? ""} />
                   <Area
@@ -590,7 +649,7 @@ export default function TrendsPage() {
                     activeDot={{ r: 6, strokeWidth: 2, stroke: "hsl(224 90% 63%)" }}
                   />
                 </AreaChart>
-              </ResponsiveContainer>
+              </SafeChart>
             </CardContent>
           </Card>
 
