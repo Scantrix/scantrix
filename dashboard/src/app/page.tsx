@@ -113,14 +113,41 @@ export default function DashboardPage() {
     .slice(-24);
 
   const trendScores = trendChartData.map((t) => t.score);
-  const trendDelta = trendScores.length > 1 ? trendScores[trendScores.length - 1] - trendScores[0] : 0;
-  const trendDirection = trendDelta < 0 ? "improving" : trendDelta > 0 ? "declining" : "flat";
-  const trendMin = trendScores.length ? Math.min(...trendScores) : 0;
-  const trendMax = trendScores.length ? Math.max(...trendScores) : 1;
-  const pivot = avgScore || 0;
-  const trendOffset = trendMax === trendMin ? 0.5 : (trendMax - pivot) / (trendMax - trendMin);
-  const gradientOffset = Math.min(1, Math.max(0, trendOffset));
-  const gradientOffsetPct = `${(gradientOffset * 100).toFixed(2)}%`;
+
+  // --- Per-segment gradient: green for improving segments, red for declining ---
+  // Build gradient stops so each segment between consecutive data points gets its
+  // own color based on whether risk_score went down (green/improving) or up (red/declining).
+  const TREND_GREEN = "hsl(152 76% 45%)";
+  const TREND_RED   = "hsl(0 84% 60%)";
+  const TREND_BLUE  = "hsl(224 90% 63%)";
+
+  const segmentStops: { offset: string; color: string }[] = [];
+  if (trendScores.length > 1) {
+    const n = trendScores.length;
+    for (let i = 0; i < n - 1; i++) {
+      const segColor = trendScores[i + 1] < trendScores[i]
+        ? TREND_GREEN                       // score went down → improving
+        : trendScores[i + 1] > trendScores[i]
+          ? TREND_RED                       // score went up → declining
+          : TREND_BLUE;                     // flat
+      const startPct = `${((i / (n - 1)) * 100).toFixed(1)}%`;
+      const endPct   = `${(((i + 1) / (n - 1)) * 100).toFixed(1)}%`;
+      segmentStops.push({ offset: startPct, color: segColor });
+      segmentStops.push({ offset: endPct,   color: segColor });
+    }
+  } else {
+    segmentStops.push({ offset: "0%", color: TREND_BLUE });
+    segmentStops.push({ offset: "100%", color: TREND_BLUE });
+  }
+
+  // Latest-segment direction for the indicator badge
+  const latestSegmentDir = trendScores.length > 1
+    ? trendScores[trendScores.length - 1] < trendScores[trendScores.length - 2]
+      ? "improving"
+      : trendScores[trendScores.length - 1] > trendScores[trendScores.length - 2]
+        ? "declining"
+        : "flat"
+    : "flat";
 
   const statCards = [
     {
@@ -226,17 +253,17 @@ export default function DashboardPage() {
             </div>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3.5 py-1.5 text-sm text-muted-foreground">
-            {trendDirection === "improving" ? (
+            {latestSegmentDir === "improving" ? (
               <TrendingDown className="h-[30px] w-[30px] text-emerald-400" />
-            ) : trendDirection === "declining" ? (
+            ) : latestSegmentDir === "declining" ? (
               <TrendingUp className="h-[30px] w-[30px] text-red-400" />
             ) : (
               <Activity className="h-[30px] w-[30px] text-blue-400" />
             )}
             <span className="font-medium">
-              {trendDirection === "improving" && "Improving"}
-              {trendDirection === "declining" && ""}
-              {trendDirection === "flat" && "Stable"}
+              {latestSegmentDir === "improving" && "Improving"}
+              {latestSegmentDir === "declining" && "Declining"}
+              {latestSegmentDir === "flat" && "Stable"}
             </span>
           </div>
         </CardHeader>
@@ -249,20 +276,26 @@ export default function DashboardPage() {
               <SafeChart height={160}>
                 <AreaChart data={trendChartData} margin={{ top: 12, right: 8, left: 8, bottom: 0 }}>
                   <defs>
-                    <linearGradient id="riskGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="hsl(0 84% 60% / 0.35)" />
-                      <stop offset={gradientOffsetPct} stopColor="hsl(0 84% 60% / 0.35)" />
-                      <stop offset={gradientOffsetPct} stopColor="hsl(152 76% 45% / 0.35)" />
-                      <stop offset="100%" stopColor="hsl(152 76% 45% / 0.35)" />
+                    {/* Horizontal stroke gradient: per-segment direction coloring */}
+                    <linearGradient id="riskStrokeGrad" x1="0" y1="0" x2="1" y2="0">
+                      {segmentStops.map((s, i) => (
+                        <stop key={`s${i}`} offset={s.offset} stopColor={s.color} />
+                      ))}
+                    </linearGradient>
+                    {/* Vertical fill gradient: per-segment color fading to transparent */}
+                    <linearGradient id="riskFillGrad" x1="0" y1="0" x2="1" y2="0">
+                      {segmentStops.map((s, i) => (
+                        <stop key={`f${i}`} offset={s.offset} stopColor={s.color} stopOpacity={0.30} />
+                      ))}
                     </linearGradient>
                   </defs>
                   <XAxis dataKey="date" hide />
                   <Area
                     type="monotone"
                     dataKey="score"
-                    stroke="hsl(224 90% 63%)"
+                    stroke="url(#riskStrokeGrad)"
                     strokeWidth={2}
-                    fill="url(#riskGradient)"
+                    fill="url(#riskFillGrad)"
                   />
                 </AreaChart>
               </SafeChart>

@@ -1048,7 +1048,7 @@ export default defineConfig({
 ## Risk Score Interpretation
 
 | Score Range | Grade | Level | Action |
-|---|---|---|---|
+|------|---|----------|----------------|
 | 0–20 | A | 🟢 Excellent | Maintain current quality |
 | 21–50 | B | 🟡 Good | Schedule minor improvements |
 | 51–85 | C | 🟠 Needs Improvement | Prioritize remediation |

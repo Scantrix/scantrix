@@ -51,6 +51,43 @@ You should treat audit_summary.md as the primary product surface.
 - Repo detail page (`/repos/[name]`) — Overview cards, repository statistics (with git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, configuration overview, scan history
 - Inventory pipeline: `push` sends `repo_inventory.json` data through to `summary_json` column for rendering on detail page
 
+### Risk Trend Chart — Dashboard (`dashboard/src/app/page.tsx`)
+
+The "Risk Trend" card on the main dashboard displays a mini area chart of the portfolio's
+average risk score over time (up to the last 24 data points from `/api/trends`).
+
+**Data source:**
+- The `/api/trends` aggregate endpoint (`dashboard/src/app/api/trends/route.ts`) uses a
+  **rolling portfolio state** — it processes all scans chronologically, maintains each repo's
+  latest known score in a `Map`, and outputs the portfolio-wide average at each scan date.
+  Re-scanning one repo does not distort the aggregate; all other repos keep their last-known
+  score in the calculation.
+
+**Per-segment coloring:**
+- Each segment between consecutive data points is independently colored based on direction:
+  - **Green** (`hsl(152 76% 45%)`) — score decreased (improving)
+  - **Red** (`hsl(0 84% 60%)`) — score increased (declining)
+  - **Blue** (`hsl(224 90% 63%)`) — score unchanged (flat)
+- Two horizontal `<linearGradient>` elements map stop percentages to segment boundaries:
+  - `riskStrokeGrad` — fully opaque colors for the `<Area>` stroke
+  - `riskFillGrad` — same colors at 30% opacity for the `<Area>` fill
+- When a new scan increases the score, **only the latest segment turns red** — earlier
+  segments that were improving remain green.
+
+**Trend indicator badge:**
+- The status badge (Improving / Declining / Stable) and its icon reflect the
+  **most recent segment's** direction (`latestSegmentDir`), comparing the last two data
+  points. This tells the user what just happened, not a summary of all history.
+
+**Key variables (in `page.tsx`):**
+| Variable | Purpose |
+|---|---|
+| `trendChartData` | Last 24 `{ date, score }` objects from `/api/trends` |
+| `trendScores` | Array of just the score values |
+| `segmentStops` | `{ offset, color }[]` — gradient stop pairs for each segment |
+| `latestSegmentDir` | `"improving"` / `"declining"` / `"flat"` based on last two scores |
+| `TREND_GREEN/RED/BLUE` | HSL color constants |
+
 ### Test Suite
 - 113 tests across 10 test files (vitest 3.2.4)
 - Fixture repos: bad-repo, good-repo, complex-config-repo, cypress-repo, selenium-repo, deprecated-repo

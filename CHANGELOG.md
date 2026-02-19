@@ -59,6 +59,29 @@ of timezone.
 - **Changed:** `dashboard/src/app/trends/page.tsx` — fixed date parsing in both trend data
   and delta data mapping functions
 
+### 🎨 Per-Segment Risk Trend Chart Coloring
+
+The Risk Trend mini-chart on the main dashboard now colors **each segment independently**
+based on whether the risk score improved or worsened between consecutive scans:
+
+- **Green** segments — score decreased (improving)
+- **Red** segments — score increased (declining)
+- **Blue** segments — score unchanged (flat)
+
+Previously the entire chart used a single color based on overall direction, which meant a
+single bad scan would turn the whole chart red even though most of the history was improving.
+
+The trend indicator badge now shows the **latest segment's direction** (last two data points)
+so the user sees what just happened rather than an all-time average.
+
+**Implementation:** Two horizontal `<linearGradient>` elements (`riskStrokeGrad`,
+`riskFillGrad`) with stop pairs computed from `segmentStops[]`, each pair marking the
+start/end percentage of the segment and its direction-based color.
+
+- **Changed:** `dashboard/src/app/page.tsx` — per-segment gradient stops, `latestSegmentDir`
+  for badge, removed single-color `trendFillColor`/`trendStrokeColor`
+- **Added:** `PROJECT_CONTEXT.md` — "Risk Trend Chart" reference section
+
 ---
 
 ## [4.2.0] - 2026-02-15
