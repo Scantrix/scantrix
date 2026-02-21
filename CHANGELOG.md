@@ -3,6 +3,30 @@
 ## [4.3.0] - 2026-02-19
 
 ### Bug Fixes & Data Integrity — Missing Repo Handling, Linkified URLs, Aggregate Trend Accuracy
+### New Feature — Clickable Scan History → Historical Scan Report
+
+---
+
+### 🔍 Clickable Scan History Dates — Historical Scan Reports
+
+Clicking a date in any Scan History table now opens the **full repo report** for that
+specific scan. The existing repo detail page (`/repos/[name]`) is reused with a `?scan=<id>`
+query parameter, rendering the same rich view (grade, score, severity breakdown, priority
+files, recommended actions, effort estimation, findings with evidence, config overview) —
+populated from the selected historical scan instead of the latest.
+
+A yellow banner indicates when viewing a historical scan, with a "View latest →" link.
+
+- **Changed:** `dashboard/src/app/api/repos/[name]/route.ts` — accepts optional `?scan=<id>`
+  query param; loads that scan (with repo ownership validation) instead of latest
+- **Changed:** `dashboard/src/app/repos/[name]/page.tsx` — reads `scan` search param via
+  `useSearchParams()`, passes to API, shows historical scan banner with back-to-latest link
+- **Changed:** `dashboard/src/app/trends/page.tsx` — scan history dates link to
+  `/repos/[name]?scan=<id>` when viewing a single repo
+- **Changed:** `dashboard/src/app/api/trends/route.ts` — per-repo query now includes
+  `s.id as scan_id` so the frontend can build scan links
+- **Removed:** `dashboard/src/app/scans/[id]/page.tsx` and `dashboard/src/app/api/scans/[id]/route.ts`
+  — superseded by the `?scan=` approach
 
 ---
 

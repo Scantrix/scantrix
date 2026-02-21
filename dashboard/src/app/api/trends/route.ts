@@ -22,7 +22,7 @@ export async function GET(request: NextRequest) {
     if (repoName) {
       const trends = db
         .prepare(
-          `SELECT s.scanned_at, date(s.scanned_at) as date, s.findings_count, s.high_count, s.medium_count,
+          `SELECT s.id as scan_id, s.scanned_at, date(s.scanned_at) as date, s.findings_count, s.high_count, s.medium_count,
                   s.low_count, s.risk_score, s.risk_grade,
                   COALESCE(
                     (SELECT COUNT(DISTINCT json_extract(je.value, '$.file'))

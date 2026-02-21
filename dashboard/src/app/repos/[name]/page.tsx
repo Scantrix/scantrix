@@ -1,8 +1,9 @@
 "use client";
 
 import React from "react";
+import Spinner from "@/components/spinner";
 import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -60,6 +61,7 @@ interface ScanSummary {
 interface RepoDetail {
   repo: { id: number; name: string; url?: string; created_at: string; updated_at: string };
   latestScan: ScanSummary | null;
+  isHistorical?: boolean;
   findings: Finding[];
   inventory: any | null;
   scanHistory: ScanSummary[];
@@ -611,26 +613,33 @@ function FindingRow({ f }: { f: Finding }) {
 /* ── Main Page ── */
 export default function RepoDetailPage() {
   const params = useParams<{ name: string }>();
+  const searchParams = useSearchParams();
   const repoName = decodeURIComponent(params.name);
+  const scanIdParam = searchParams.get("scan");
 
   const [data, setData] = useState<RepoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetch(`/api/repos/${encodeURIComponent(repoName)}`)
+    setLoading(true);
+    setError(null);
+    const url = scanIdParam
+      ? `/api/repos/${encodeURIComponent(repoName)}?scan=${encodeURIComponent(scanIdParam)}`
+      : `/api/repos/${encodeURIComponent(repoName)}`;
+    fetch(url)
       .then((r) => {
         if (!r.ok) throw new Error(r.status === 404 ? "Repository not found" : "Failed to load");
         return r.json();
       })
       .then((d) => { setData(d); setLoading(false); })
       .catch((e) => { setError(e.message); setLoading(false); });
-  }, [repoName]);
+  }, [repoName, scanIdParam]);
 
   if (loading) {
     return (
-      <div className="flex h-96 items-center justify-center text-muted-foreground animate-fade-in">
-        Loading...
+      <div className="animate-fade-in">
+        <Spinner size={80} />
       </div>
     );
   }
@@ -648,6 +657,7 @@ export default function RepoDetailPage() {
   }
 
   const { repo, latestScan, findings, inventory, scanHistory } = data;
+  const isHistorical = data.isHistorical ?? false;
   const grade = latestScan?.risk_grade ?? "—";
   const score = latestScan?.risk_score ?? 0;
 
@@ -679,7 +689,19 @@ export default function RepoDetailPage() {
           <div className="mt-4 flex flex-wrap items-center rounded-lg border border-border/50 bg-muted/20 px-3 py-3 text-sm text-muted-foreground">
             <Clock className="h-4.5 w-4.5 text-blue-400"/>
             <code className="rounded bg-primary/0 px-2 py-0.5 text-xs font-mono font-small text-primary"></code>            
-            Last scanned {formatDate(latestScan.scanned_at)}
+            {isHistorical ? "Scan from" : "Scan date:"} {formatDate(latestScan.scanned_at)}
+          </div>
+        )}
+        {isHistorical && (
+          <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
+            <AlertTriangle className="h-4 w-4 shrink-0" />
+            You are viewing a historical scan report.
+            <Link
+              href={`/repos/${encodeURIComponent(repo.name)}`}
+              className="ml-auto text-xs text-blue-400 hover:underline whitespace-nowrap"
+            >
+              View latest &rarr;
+            </Link>
           </div>
         )}
       </div>
@@ -1193,7 +1215,12 @@ export default function RepoDetailPage() {
                 {scanHistory.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="text-muted-foreground text-sm">
-                      {formatDate(s.scanned_at)}
+                      <Link
+                        href={`/repos/${encodeURIComponent(repo.name)}?scan=${s.id}`}
+                        className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                      >
+                        {formatDate(s.scanned_at)}
+                      </Link>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className={`font-bold ${gradeColor[s.risk_grade ?? ""] ?? ""}`}>

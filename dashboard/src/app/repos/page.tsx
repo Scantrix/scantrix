@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FolderGit2 } from "lucide-react";
+import Spinner from "@/components/spinner";
 
 interface RepoRow {
   id: number;
@@ -56,7 +57,7 @@ export default function ReposPage() {
       </div>
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-muted-foreground">Loading...</div>
+        <Spinner />
       ) : repos.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-16">
           <FolderGit2 className="mb-4 h-12 w-12 text-muted-foreground/40" />

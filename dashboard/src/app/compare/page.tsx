@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Spinner from "@/components/spinner";
 import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -103,7 +104,7 @@ export default function ComparePage() {
       </div>
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-muted-foreground">Loading...</div>
+        <Spinner />
       ) : data.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-16">
           <GitCompare className="mb-4 h-12 w-12 text-muted-foreground/40" />

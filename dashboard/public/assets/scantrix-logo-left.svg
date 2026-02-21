@@ -1,0 +1,56 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="250 400 5900 2350"
+     preserveAspectRatio="xMinYMid meet"
+     role="img"
+     aria-label="SCANTRIX">
+  <defs>
+    <style>
+      /* Magnifying glass accent strokes */
+      .st0 { fill: #4c79f6; }
+
+      /* Magnifying glass base fill */
+      .st4 { fill: #e5e7eb; }
+
+      /* Wordmark */
+      .st3 {
+        font-family: Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 950px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+
+      /* Tagline */
+      .st1 {
+        font-family: Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 182px;
+        fill: #4c79f6;
+        font-weight: 500;
+        letter-spacing: 0.08em;
+      }
+    </style>
+  </defs>
+
+  <!-- Magnifying glass icon -->
+  <g id="icon">
+    <path id="base"    class="st4" d="M1800.32,470.46c-360.22-43.31-703.53,111.92-868.43,409.81-202.79,366.34-140.08,707.7,142.47,1024.26-60.31,52.56-120.56,105.06-185.93,162.02,35.09,35.45,59.89,60.5,91.72,92.66,66.01-59.73,127.79-115.63,195.68-177.06,177.96,108.97,369,170.54,583.06,143.58-230.35-18.09-426.4-105.56-582.71-268.7-158.59-165.53-237.47-363.55-228.88-588.51,14.35-375.51,313.19-773.52,853.01-798.06Z"/>
+    <path id="handle"  class="st0" d="M330.79,2485.74c62.06,63.97,115.51,119.05,174.28,179.63,157.04-143.23,310.66-283.34,466.6-425.57-55.48-62.47-108.38-122.04-166.51-187.5-158.9,145.19-316.97,289.62-474.38,433.44Z"/>
+    <path id="topArc"  class="st0" d="M1443.39,641.13c432.55-135.29,694.27-56.91,976.88,294.04,15.81,19.63,43.04,30.73,80.73,56.65-119.37-367.35-648.81-590.71-1057.61-350.69Z"/>
+  </g>
+
+  <!-- Wordmark: single text element — browser handles natural kerning -->
+  <text class="st3" x="1280" y="1750">
+    <tspan fill="#e5e7eb">SC</tspan><tspan fill="#e5e7eb">&#923;</tspan><tspan fill="#e5e7eb">NTR</tspan>
+  </text>
+  <!-- dot over the "i" -->
+  <circle cx="5280" cy="1155" r="70" fill="#e5e7eb" opacity="0.9"/>
+
+    <!-- Decorative accent line used as the i -->
+  <rect x="5210" y="1300" width="150" height="450" rx="1" fill="#4c79f6" opacity="0.9"/>
+  <text class="st3" x="5460" y="1750">
+    <tspan fill="#e5e7eb">X</tspan>
+  </text>
+  <!-- Tagline: font-size set directly, no scale() transform -->
+  <!--
+  <text class="st1" x="1620" y="1910.47">AUTOMATION FRAMEWORK DIAGNOSTICS</text>
+  -->
+</svg>
