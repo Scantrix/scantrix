@@ -37,22 +37,24 @@ export default function Sidebar() {
       )}
     >
       {/* ── Brand ── */}
-      <div className="flex h-16 items-center gap-3 border-b border-border/40 px-4">
+      <div className="flex h-24 items-center gap-3 border-b border-border/40 px-4">
         <Link href="/" className="flex items-center gap-3 overflow-hidden">
           <img
             src="/assets/scantrix-logo.svg"
             alt="SCANTRIX"
             className={cn(
-              "h-8 w-auto shrink-0 transition-transform hover:scale-105",
+              "h-20 w-auto shrink-0 transition-transform hover:scale-105",
               collapsed && "hidden",
             )}
           />
           {collapsed && (
-            <img
-              src="/assets/scantrix-logo.svg"
-              alt="SCANTRIX"
-              className="h-8 w-8 shrink-0 rounded transition-transform hover:scale-105"
-            />
+            <div className="h-12 w-12 shrink-0 overflow-hidden">
+              <img
+                src="/assets/scantrix-logo.svg"
+                alt="SCANTRIX"
+                className="h-12 w-auto transition-transform hover:scale-105"
+              />
+            </div>
           )}
         </Link>
       </div>

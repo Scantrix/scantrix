@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState, useMemo } from "react";
+import Spinner from "@/components/spinner";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -29,6 +31,7 @@ interface TrendPoint {
   key: string;   // unique x-axis identity (ISO ts or date)
   label: string; // human-readable tick label
   date: string;
+  scan_id?: number; // DB primary key (per-repo only; absent for aggregate)
   findings_count: number;
   high_count: number;
   medium_count: number;
@@ -253,7 +256,7 @@ export default function TrendsPage() {
           const ts = r.scanned_at as string | undefined;
           const dateStr = r.date as string;
           const key = ts ?? dateStr; // unique identity
-          // Format label: "Feb 14 17:03" for per-repo, "Feb 14" for aggregate
+          // Format label: "Feb 14 5:03 PM" for per-repo, "Feb 14" for aggregate
           // Note: date-only strings like "2026-02-19" are parsed as UTC midnight
           // by new Date(), which shifts to the previous day in US timezones.
           // Append T12:00:00 to force local-noon interpretation.
@@ -261,7 +264,7 @@ export default function TrendsPage() {
           try {
             const d = ts ? new Date(ts) : new Date(dateStr + "T12:00:00");
             label = ts
-              ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+              ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + " " + d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
               : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
           } catch { /* keep raw */ }
 
@@ -269,6 +272,7 @@ export default function TrendsPage() {
             key,
             label,
             date: dateStr,
+            scan_id: typeof r.scan_id === "number" ? r.scan_id : undefined,
             findings_count: r.findings_count ?? r.total_findings ?? 0,
             high_count: r.high_count ?? r.total_high ?? 0,
             medium_count: r.medium_count ?? r.total_medium ?? 0,
@@ -306,7 +310,7 @@ export default function TrendsPage() {
               label = ts
                 ? d.toLocaleDateString("en-US", { month: "short", day: "numeric" }) +
                   " " +
-                  d.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false })
+                  d.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", hour12: true })
                 : d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
             } catch { /* keep raw */ }
             return {
@@ -408,7 +412,7 @@ export default function TrendsPage() {
       </div>
 
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-muted-foreground">Loading...</div>
+        <Spinner />
       ) : trendData.length === 0 ? (
         <Card className="flex flex-col items-center justify-center py-16">
           <TrendingUp className="mb-4 h-12 w-12 text-muted-foreground/40" />
@@ -707,7 +711,18 @@ export default function TrendsPage() {
                 <TableBody>
                   {tableRows.map((t, i) => (
                     <TableRow key={i}>
-                      <TableCell className="text-muted-foreground">{t.label}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {t.scan_id != null ? (
+                          <Link
+                            href={`/repos/${encodeURIComponent(selectedRepo)}?scan=${t.scan_id}`}
+                            className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
+                          >
+                            {t.label}
+                          </Link>
+                        ) : (
+                          t.label
+                        )}
+                      </TableCell>
                       <TableCell className="text-right font-medium">{t.findings_count}</TableCell>
                       <TableCell className="text-right"><DeltaChip value={t.findingsDelta} invert /></TableCell>
                       <TableCell className="text-right">

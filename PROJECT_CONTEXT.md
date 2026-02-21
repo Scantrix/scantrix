@@ -45,10 +45,10 @@ You should treat audit_summary.md as the primary product surface.
 - Next.js 14 + SQLite (better-sqlite3)
 - `dashboard/src/lib/db.ts` — Database schema + queries (repos, scans, findings, api_keys)
 - `dashboard/src/lib/types.ts` — Shared TypeScript types
-- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name], trends, compare)
+- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name](?scan=id), trends, compare)
 - `dashboard/src/app/` — Frontend pages (dashboard, repos, repos/[name] detail, trends, compare)
 - `dashboard/src/components/sidebar.tsx` — Collapsible icon-driven sidebar navigation
-- Repo detail page (`/repos/[name]`) — Overview cards, repository statistics (with git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, configuration overview, scan history
+- Repo detail page (`/repos/[name]`) — Overview cards, repository statistics (with git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, configuration overview, scan history (dates link to `?scan=<id>` for historical report). Supports `?scan=<id>` query param to view any historical scan with the full report layout.
 - Inventory pipeline: `push` sends `repo_inventory.json` data through to `summary_json` column for rendering on detail page
 
 ### Risk Trend Chart — Dashboard (`dashboard/src/app/page.tsx`)

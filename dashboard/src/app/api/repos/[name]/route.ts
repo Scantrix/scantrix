@@ -4,15 +4,20 @@ import { getDb } from "@/lib/db";
 /**
  * GET /api/repos/[name] — Return full details for a single repository:
  *   - repo metadata
- *   - latest scan summary
- *   - all findings from the latest scan (with evidence)
+ *   - scan summary (latest, or specific scan via ?scan=<id>)
+ *   - all findings from the selected scan (with evidence)
  *   - scan history for mini-trend
+ *
+ * Query params:
+ *   ?scan=<id>  — load a specific scan instead of the latest
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: { name: string } },
 ) {
   const repoName = decodeURIComponent(params.name);
+  const { searchParams } = new URL(request.url);
+  const scanIdParam = searchParams.get("scan");
 
   try {
     const db = getDb();
@@ -29,28 +34,54 @@ export async function GET(
       );
     }
 
-    // ── Latest scan ──
-    const latestScan = db
-      .prepare(
-        `SELECT * FROM scans
-         WHERE repo_id = ?
-         ORDER BY scanned_at DESC
-         LIMIT 1`,
-      )
-      .get(repo.id) as any | undefined;
+    // ── Selected scan (specific or latest) ──
+    let selectedScan: Record<string, unknown> | undefined;
+
+    if (scanIdParam) {
+      const scanId = parseInt(scanIdParam, 10);
+      if (Number.isNaN(scanId) || scanId < 1) {
+        return NextResponse.json(
+          { error: "Invalid scan ID" },
+          { status: 400 },
+        );
+      }
+      // Load specific scan, verify it belongs to this repo
+      selectedScan = db
+        .prepare(
+          `SELECT * FROM scans
+           WHERE id = ? AND repo_id = ?`,
+        )
+        .get(scanId, repo.id) as Record<string, unknown> | undefined;
+
+      if (!selectedScan) {
+        return NextResponse.json(
+          { error: `Scan ${scanId} not found for repository "${repoName}"` },
+          { status: 404 },
+        );
+      }
+    } else {
+      selectedScan = db
+        .prepare(
+          `SELECT * FROM scans
+           WHERE repo_id = ?
+           ORDER BY scanned_at DESC
+           LIMIT 1`,
+        )
+        .get(repo.id) as Record<string, unknown> | undefined;
+    }
 
     // Parse inventory/config from summary_json
-    let inventory: any = null;
-    if (latestScan?.summary_json) {
+    let inventory: unknown = null;
+    if (selectedScan?.summary_json) {
       try {
-        inventory = JSON.parse(latestScan.summary_json);
+        inventory = JSON.parse(selectedScan.summary_json as string);
       } catch { /* corrupt JSON — skip */ }
     }
 
-    // ── Findings for latest scan ──
-    let findings: any[] = [];
-    if (latestScan) {
-      findings = db
+    // ── Findings for selected scan ──
+    let findings: Record<string, unknown>[] = [];
+    if (selectedScan) {
+      const rawFindings = db
         .prepare(
           `SELECT finding_id, severity, title, description, recommendation,
                   evidence_count, evidence_json
@@ -60,12 +91,12 @@ export async function GET(
              CASE severity WHEN 'high' THEN 0 WHEN 'medium' THEN 1 ELSE 2 END,
              evidence_count DESC`,
         )
-        .all(latestScan.id);
+        .all(selectedScan.id as number) as Record<string, unknown>[];
 
       // Parse evidence JSON for each finding
-      findings = findings.map((f: any) => ({
+      findings = rawFindings.map((f) => ({
         ...f,
-        evidence: f.evidence_json ? JSON.parse(f.evidence_json) : [],
+        evidence: f.evidence_json ? JSON.parse(f.evidence_json as string) : [],
         evidence_json: undefined,
       }));
     }
@@ -90,24 +121,26 @@ export async function GET(
         created_at: repo.created_at,
         updated_at: repo.updated_at,
       },
-      latestScan: latestScan
+      latestScan: selectedScan
         ? {
-            id: latestScan.id,
-            scanned_at: latestScan.scanned_at,
-            findings_count: latestScan.findings_count,
-            high_count: latestScan.high_count,
-            medium_count: latestScan.medium_count,
-            low_count: latestScan.low_count,
-            risk_score: latestScan.risk_score,
-            risk_grade: latestScan.risk_grade,
+            id: selectedScan.id,
+            scanned_at: selectedScan.scanned_at,
+            findings_count: selectedScan.findings_count,
+            high_count: selectedScan.high_count,
+            medium_count: selectedScan.medium_count,
+            low_count: selectedScan.low_count,
+            risk_score: selectedScan.risk_score,
+            risk_grade: selectedScan.risk_grade,
           }
         : null,
+      isHistorical: !!scanIdParam,
       findings,
       inventory,
       scanHistory,
     });
-  } catch (err: any) {
-    console.error(`[api/repos/${repoName}] Error:`, err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal error";
+    console.error(`[api/repos/${repoName}] Error:`, message);
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

@@ -1710,30 +1710,19 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       const analysis = analyzeTestFile(content);
       if (analysis.testCount === 0) continue;
 
-      // Count assertions: expect(), toBeVisible, toHaveText, toContainText, toBeEnabled, etc.
-      const assertionPatterns = [
-        /\bexpect\s*\(/g,
-        /\btoPass\s*\(/g,
-        /\.toBeVisible\s*\(/g,
-        /\.toHaveText\s*\(/g,
-        /\.toContainText\s*\(/g,
-        /\.toBeEnabled\s*\(/g,
-        /\.toBeDisabled\s*\(/g,
-        /\.toHaveURL\s*\(/g,
-        /\.toHaveTitle\s*\(/g,
-        /\.toHaveValue\s*\(/g,
-        /\.toBeChecked\s*\(/g,
-        /\.toHaveCount\s*\(/g,
-      ];
-      let assertionCount = 0;
-      for (const pat of assertionPatterns) {
-        const matches = content.match(pat);
-        if (matches) assertionCount += matches.length;
-      }
+      // Count assertions by counting expect() / expect.soft() / expect.poll() calls.
+      // Previously this also counted individual matchers (.toBeVisible, .toHaveText, etc.)
+      // which double-counted: `expect(loc).toBeVisible()` matched BOTH expect( AND .toBeVisible(,
+      // inflating the count ~2x and making the threshold too forgiving.
+      // Every Playwright assertion chains off one of these entry points, so they are
+      // the single reliable anchors.
+      const assertionPattern = /\bexpect\s*(?:\.(?:soft|poll)\s*)?\(/g;
+      const assertionMatches = content.match(assertionPattern);
+      const assertionCount = assertionMatches ? assertionMatches.length : 0;
 
       // Flag files where assertion count is very low relative to test count
-      // Heuristic: fewer than 0.5 assertions per test indicates likely missing checks
-      if (analysis.testCount >= 2 && assertionCount < analysis.testCount * 0.5) {
+      // Heuristic: fewer than 1 assertion (expect call) per test indicates likely missing checks
+      if (analysis.testCount >= 2 && assertionCount < analysis.testCount) {
         testsWithoutAssertions.push({
           file: normalize(testFile),
           testCount: analysis.testCount,
@@ -1752,7 +1741,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       severity: "high",
       title: "Tests without assertions (expect()) detected",
       description:
-        `${testsWithoutAssertions.length} test file(s) contain tests but have very few or no assertions. Tests that navigate but never assert are 'green noise' — they always pass and provide zero quality signal.`,
+        `${testsWithoutAssertions.length} test file(s) contain tests but have very few or no assertions. Tests that navigate but never assert are 'green noise', they always pass and provide zero quality signal.`,
       recommendation:
         "Every test should contain at least one expect() assertion that verifies observable behavior. Add assertions for page content, URLs, API responses, or element states. Focus on the most critical user flows first.",
       evidence: sorted.slice(0, 20).map(({ file, testCount, assertionCount }) => ({
@@ -2993,9 +2982,9 @@ const pwUsesWorkersEnv =
       severity: "high",
       title: '"Green but useless" tests (no assertions + retries)',
       description:
-        `${stability004 ? stability004.description + " " : ""}Combined with enabled retries, these tests create an illusion of quality — they may never fail, but count toward pass rates. This is worse than having no tests — it gives false confidence.`,
+        `${stability004 ? stability004.description + " " : ""}Combined with enabled retries, these tests create an illusion of quality, they may never fail, but count toward pass rates. This is worse than having no tests and creates false confidence.`,
       recommendation:
-        "Add meaningful expect() assertions to every test. If the assertion is in the page object, move it to the test itself. A test without an assertion is not testing anything. Consider adding a lint rule to require at least one assertion per test.",
+        "Add meaningful expect() assertions to every test. Keep Page Objects focused on actions and state accessors; put assertions in the test (or in small, domain-named assertion helpers) so intent remains explicit. A test without an assertion provides no quality signal. Add a linter rule to require at least one assertion per test",
       evidence: [
         ...testFileEvidence,
         {

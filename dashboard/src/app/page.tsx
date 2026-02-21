@@ -10,6 +10,7 @@ import {
 import {
   BarChart3, AlertTriangle, Activity, ShieldCheck, SearchCode, LineChart, TrendingDown, TrendingUp, Search, Filter
 } from "lucide-react";
+import Spinner from "@/components/spinner";
 import {
   Area,
   AreaChart,
@@ -305,9 +306,7 @@ export default function DashboardPage() {
 
       {/* Repo table */}
       {loading ? (
-        <div className="flex h-48 items-center justify-center text-muted-foreground">
-          Loading...
-        </div>
+        <Spinner />
       ) : repos.length === 0 ? (
         <Card className="relative overflow-hidden flex flex-col items-center justify-center py-16">
           <div className="absolute -right-20 -top-20 h-44 w-44 rounded-full bg-primary/10 blur-3xl" />
