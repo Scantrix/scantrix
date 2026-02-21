@@ -1,4 +1,4 @@
-You are working on Repo Audit Agent (Qaverity), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
+You are working on Repo Audit Agent (Scantrix), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
 **Version:** 4.2.0
 
@@ -34,12 +34,12 @@ You should treat audit_summary.md as the primary product surface.
 - `src/cypressExtractor.ts` — Cypress project detection and config parsing
 - `src/diffTracker.ts` — Trend tracking: snapshots with git metadata + inventory, auto-baseline, evidence-level diffs with path normalization, inventory deltas
 - `src/auditConfig.ts` — `.auditrc.json` loading, merging, and default generation
-- `src/pushClient.ts` — HTTP client for pushing findings to the Qaverity dashboard API
+- `src/pushClient.ts` — HTTP client for pushing findings to the Scantrix dashboard API
 - `src/sarifFormatter.ts` — SARIF 2.1.0 output formatter
 
 ### CI Integration
 - `action.yml` — GitHub Action (composite) for CI integration
-- `.github/workflows/qaverity-example.yml` — Example workflow
+- `.github/workflows/scantrix-example.yml` — Example workflow
 
 ### Web Dashboard (`dashboard/`)
 - Next.js 14 + SQLite (better-sqlite3)

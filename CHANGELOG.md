@@ -313,7 +313,7 @@ computeDiff(previous, current, {
 ###  Phase 2 Complete — Trend Tracking, CI Integration, Web Dashboard
 
 This release delivers the full Phase 2 product features: enhanced trend tracking with
-auto-snapshots, a GitHub Action for CI integration, a push client for the Qaverity
+auto-snapshots, a GitHub Action for CI integration, a push client for the Scantrix
 dashboard, CLI subcommands (`init`, `push`), and a complete Next.js web dashboard
 for historical audit data, trend visualization, and cross-repo comparison.
 
@@ -323,10 +323,10 @@ for historical audit data, trend visualization, and cross-repo comparison.
 
 | Module | Purpose |
 |--------|---------|
-| `src/pushClient.ts` | HTTP(S) client for pushing audit findings to the Qaverity dashboard API |
+| `src/pushClient.ts` | HTTP(S) client for pushing audit findings to the Scantrix dashboard API |
 | `dashboard/` | Next.js 14 web dashboard with SQLite backend |
 | `action.yml` | GitHub Action (composite) for CI integration |
-| `.github/workflows/qaverity-example.yml` | Example workflow for PR + nightly audits |
+| `.github/workflows/scantrix-example.yml` | Example workflow for PR + nightly audits |
 
 ### 🔄 Enhanced Trend Tracking & Diff Mode
 
@@ -358,9 +358,9 @@ The trend/diff subsystem (`src/diffTracker.ts`) has been substantially expanded:
 The CLI (`src/cli.ts`) now supports three modes:
 
 ```
-qaverity <repoPath> [--out <dir>] [--format ...] [--no-trend]   # Standard scan
-qaverity init [dir]                                              # Create starter .auditrc.json
-qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashboard
+scantrix <repoPath> [--out <dir>] [--format ...] [--no-trend]   # Standard scan
+scantrix init [dir]                                              # Create starter .auditrc.json
+scantrix push [findings.json] [--key <key>] [--url <url>]       # Push to dashboard
 ```
 
 **Standard scan enhancements:**
@@ -374,7 +374,7 @@ qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashbo
 
 **`push` subcommand:**
 - Reads `findings.json` and POSTs to the dashboard API with Bearer token auth
-- Supports `--key`, `--url`, `--repo` flags and `QAVERITY_API_KEY`, `QAVERITY_API_URL`, `QAVERITY_REPO_NAME` env vars
+- Supports `--key`, `--url`, `--repo` flags and `SCANTRIX_API_KEY`, `SCANTRIX_API_URL`, `SCANTRIX_REPO_NAME` env vars
 - Auto-infers repo name from `GITHUB_REPOSITORY` (GitHub Actions), `BUILD_REPOSITORY_NAME` (Azure DevOps), or cwd
 
 ### 🤖 GitHub Action (CI Integration)
@@ -389,10 +389,10 @@ qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashbo
 | Outputs | `findings-count`, `high-count`, `medium-count`, `low-count`, `risk-grade`, `report-path` |
 | Artifacts | Auto-uploads audit artifacts (30-day retention) |
 | PR comments | Posts/updates a summary comment with grade, finding counts, diff delta, and top findings table |
-| Dashboard push | Optionally pushes findings to Qaverity dashboard API when `api-key` is provided |
+| Dashboard push | Optionally pushes findings to Scantrix dashboard API when `api-key` is provided |
 | Quality gate | `fail-on-high: true` fails the workflow if any high-severity findings exist |
 
-**`.github/workflows/qaverity-example.yml`** — Example workflow:
+**`.github/workflows/scantrix-example.yml`** — Example workflow:
 - Triggers on PR to main/master, nightly cron (2 AM UTC), manual dispatch
 - Includes optional SARIF upload to GitHub Code Scanning
 
@@ -427,10 +427,10 @@ A complete Next.js 14 web dashboard under `dashboard/`:
 | `/compare` | `compare/page.tsx` | Sortable comparison table, trend indicators (↑↓→), risk score bar chart |
 
 **UI design:**
-- Dark theme matching Qaverity indigo-blue brand palette
+- Dark theme matching Scantrix indigo-blue brand palette
 - Responsive card grid layout
 - Grade badges (A–F), severity badges, trend indicators (improving/degrading/stable)
-- Nav bar with Qaverity branding
+- Nav bar with Scantrix branding
 
 ### ✅ Test Suite
 

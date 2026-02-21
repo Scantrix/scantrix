@@ -175,7 +175,7 @@ Phase 2 is complete plus a major dashboard UX overhaul. The product now includes
 - **AST-based config parsing** via TypeScript Compiler API
 - **Trend tracking** with auto-snapshots (including git branch/commit and inventory data), evidence-level diffs with Windows path normalization, and inventory-level deltas
 - **GitHub Action** for CI integration with PR comments and quality gates
-- **Push client** for sending findings + inventory to the Qaverity dashboard API
+- **Push client** for sending findings + inventory to the Scantrix dashboard API
 - **Web dashboard** (Next.js 14 + SQLite) with collapsible sidebar navigation, repository detail page (grade cards, statistics, severity breakdown, priority files, recommended actions, findings table, config overview, scan history), trend visualization, and cross-repo comparison
 - **Inventory pipeline** — `repo_inventory.json` (with git branch/commit) flows from report → push → dashboard DB → detail page
 - **Git-aware reports** showing scanned branch and commit in the audit summary
@@ -207,7 +207,7 @@ It is intentionally:
 
 ## Handoff Instructions for VS Code Agent
 
-### You are continuing work on Qaverity (Repo Audit Agent) v4.2.0.
+### You are continuing work on Scantrix (Repo Audit Agent) v4.2.0.
 
 Key files:
 - `src/scanner.ts` — Core orchestration, 50+ audit rules, framework detection, git metadata capture
@@ -254,7 +254,7 @@ Key files:
 
 ## Prompt for Another Agent (Copy/Paste)
 
-You are working on **Qaverity** (Repo Audit Agent), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
+You are working on **Scantrix** (Repo Audit Agent), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
 **Version:** 4.2.0 | **Tests:** 113 | **Rules:** 50+
 

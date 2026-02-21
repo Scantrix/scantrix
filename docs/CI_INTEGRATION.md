@@ -1,6 +1,6 @@
 # CI Integration Guide
 
-This guide covers how to integrate Qaverity into your CI/CD pipeline.
+This guide covers how to integrate Scantrix into your CI/CD pipeline.
 
 ## Quick Start
 

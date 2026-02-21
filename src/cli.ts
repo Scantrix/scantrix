@@ -29,12 +29,17 @@ async function main() {
   // ── Subcommand: push ─────────────────────────────────────────────
   if (subcommand === "push") {
     const findingsPath = args._[1] || "./audit-out/findings.json";
-    const apiUrl = (args.url as string) || process.env.QAVERITY_API_URL || "https://api.qaverity.com";
-    const apiKey = (args.key as string) || process.env.QAVERITY_API_KEY;
-    const repoName = (args.repo as string) || process.env.QAVERITY_REPO_NAME;
+    const apiUrl = (args.url as string) || process.env.SCANTRIX_API_URL || process.env.QAVERITY_API_URL || "https://api.scantrix.com";
+    const apiKey = (args.key as string) || process.env.SCANTRIX_API_KEY || process.env.QAVERITY_API_KEY;
+    const repoName = (args.repo as string) || process.env.SCANTRIX_REPO_NAME || process.env.QAVERITY_REPO_NAME;
+
+    // Emit deprecation warnings for legacy env vars
+    if (!process.env.SCANTRIX_API_URL && process.env.QAVERITY_API_URL) console.warn("[deprecation] QAVERITY_API_URL is deprecated — use SCANTRIX_API_URL");
+    if (!process.env.SCANTRIX_API_KEY && process.env.QAVERITY_API_KEY) console.warn("[deprecation] QAVERITY_API_KEY is deprecated — use SCANTRIX_API_KEY");
+    if (!process.env.SCANTRIX_REPO_NAME && process.env.QAVERITY_REPO_NAME) console.warn("[deprecation] QAVERITY_REPO_NAME is deprecated — use SCANTRIX_REPO_NAME");
 
     if (!apiKey) {
-      console.error("[push] Missing API key. Set --key or QAVERITY_API_KEY env var.");
+      console.error("[push] Missing API key. Set --key or SCANTRIX_API_KEY env var.");
       process.exit(1);
     }
 
@@ -77,12 +82,12 @@ async function main() {
   if (!repoPath) {
     console.error(
       "Usage:\n" +
-      "  qaverity <repoPath> [--out <dir>] [--updates] [--config <path>]\n" +
+      "  scantrix <repoPath> [--out <dir>] [--updates] [--config <path>]\n" +
       "           [--diff <baseline.json>] [--format md,html,json,sarif,email]\n" +
       "           [--no-trend]\n" +
       "\n" +
-      "  qaverity init [dir]           Create a starter .auditrc.json\n" +
-      "  qaverity push [findings.json] Push results to Qaverity dashboard\n" +
+      "  scantrix init [dir]           Create a starter .auditrc.json\n" +
+      "  scantrix push [findings.json] Push results to Scantrix dashboard\n" +
       "           [--key <api-key>] [--url <api-url>] [--repo <name>]\n"
     );
     process.exit(1);

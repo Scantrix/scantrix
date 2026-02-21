@@ -1,17 +1,17 @@
-# Qaverity Deployment & Multi-Repo Setup Guide
+# Scantrix Deployment & Multi-Repo Setup Guide
 
-This guide explains how Qaverity works across multiple repositories, how to deploy the dashboard, and how teams get a unified view of all their automation repos in one place.
+This guide explains how Scantrix works across multiple repositories, how to deploy the dashboard, and how teams get a unified view of all their automation repos in one place.
 
 ---
 
-## How Qaverity Works Across Multiple Repos
+## How Scantrix Works Across Multiple Repos
 
-Qaverity has two components that work together:
+Scantrix has two components that work together:
 
 | Component | What It Does | Where It Runs |
 |-----------|-------------|---------------|
-| **Qaverity CLI** (scanner) | Scans a repo's test code, config, and CI pipelines. Produces findings and reports. | Inside each repo's CI pipeline |
-| **Qaverity Dashboard** (web app) | Central web interface that collects, stores, and visualizes results from all repos. | One shared server |
+| **Scantrix CLI** (scanner) | Scans a repo's test code, config, and CI pipelines. Produces findings and reports. | Inside each repo's CI pipeline |
+| **Scantrix Dashboard** (web app) | Central web interface that collects, stores, and visualizes results from all repos. | One shared server |
 
 ### The Key Concept: Scan Locally, Push Centrally
 
@@ -22,7 +22,7 @@ Each repository runs its own scan in its own CI pipeline. After the scan complet
 │ Repo A - CI build   │──scan──► findings.json ──push──┐
 └─────────────────────┘                               │
 ┌─────────────────────┐                               │    ┌──────────────────────┐
-│ Repo B - CI build   │──scan──► findings.json ──push──┼───►│ Qaverity Dashboard    │
+│ Repo B - CI build   │──scan──► findings.json ──push──┼───►│ Scantrix Dashboard    │
 └─────────────────────┘                               │    │ (single instance)     │
 ┌─────────────────────┐                               │    │  ┌─────────────────┐  │
 │ Repo C - CI build   │──scan──► findings.json ──push──┘    │  │   SQLite DB     │  │
@@ -37,14 +37,14 @@ You do **not** install the full dashboard in every repo. Each repo only needs th
 
 **Option A - npm devDependency** (for any CI platform):
 ```bash
-npm install --save-dev qaverity
+npm install --save-dev scantrix
 ```
 
 **Option B - GitHub Action** (for GitHub repos - zero install required):
 ```yaml
-- uses: your-org/qaverity@v4
+- uses: your-org/scantrix@v4
   with:
-    api-key: ${{ secrets.QAVERITY_API_KEY }}
+    api-key: ${{ secrets.SCANTRIX_API_KEY }}
     api-url: https://your-dashboard-url.com
 ```
 
@@ -53,7 +53,7 @@ The dashboard only needs to be deployed once, and all repos push to it.
 ## Dashboard Deployment
 
 ### What Is the Dashboard?
-The Qaverity Dashboard is a Next.js 14 web application with a SQLite database. It provides:
+The Scantrix Dashboard is a Next.js 14 web application with a SQLite database. It provides:
 
 - **Main dashboard** - Overview cards for every repo with grades, finding counts, and last-scan timestamps
 - **Repo detail pages** - Deep-dive into findings, severity breakdown, priority files, config overview, scan history
@@ -89,8 +89,8 @@ Run the dashboard on any Linux or Windows server your CI pipelines can reach.
 
 ```bash
 # 1. Clone the repo and install dependencies
-git clone https://your-org/repo-audit-agent.git /opt/qaverity
-cd /opt/qaverity/dashboard
+git clone https://your-org/repo-audit-agent.git /opt/scantrix
+cd /opt/scantrix/dashboard
 npm ci
 
 # 2. Build the production app
@@ -110,15 +110,15 @@ Keeping it running: Use a process manager like `pm2` or a systemd service:
 ```bash
 # With pm2:
 npm install -g pm2
-pm2 start npm --name "qaverity" -- run start
+pm2 start npm --name "scantrix" -- run start
 pm2 save
 pm2 startup   # auto-start on reboot
 
 # With systemd (Linux):
-# Create /etc/systemd/system/qaverity.service
+# Create /etc/systemd/system/scantrix.service
 # [Service]
 # ExecStart=/usr/bin/npm run start
-# WorkingDirectory=/opt/qaverity/dashboard
+# WorkingDirectory=/opt/scantrix/dashboard
 # Restart=always
 ```
 
@@ -134,8 +134,8 @@ CMD ["npm", "run", "start"]
 ```
 
 ```bash
-docker build -t qaverity-dashboard .
-docker run -d -p 3000:3000 -v qaverity-data:/app/data qaverity-dashboard
+docker build -t scantrix-dashboard .
+docker run -d -p 3000:3000 -v scantrix-data:/app/data scantrix-dashboard
 ```
 
 Important: Mount the `/app/data` directory as a Docker volume so the SQLite database persists across container restarts.
@@ -164,12 +164,12 @@ Once the dashboard is running, configure each repo's CI pipeline to push results
 Whatever machine or container is hosting the dashboard - that's your push URL. Examples:
 
 - http://10.0.1.50:3000 (internal IP)
-- https://qaverity.your-company.com (behind a reverse proxy with HTTPS)
+- https://scantrix.your-company.com (behind a reverse proxy with HTTPS)
 - http://localhost:3000 (local development)
 
 ### Step 2: Configure CI Pipelines
 
-#### GitHub Actions (Using the Qaverity Action)
+#### GitHub Actions (Using the Scantrix Action)
 
 ```yaml
 name: Automation Audit
@@ -184,10 +184,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: your-org/qaverity@v4
+      - uses: your-org/scantrix@v4
         with:
-          api-key: ${{ secrets.QAVERITY_API_KEY }}
-          api-url: ${{ secrets.QAVERITY_API_URL }}   # e.g., https://qaverity.internal.com
+          api-key: ${{ secrets.SCANTRIX_API_KEY }}
+          api-url: ${{ secrets.SCANTRIX_API_URL }}   # e.g., https://scantrix.internal.com
           fail-on-high: true                          # optional: block PR merges
           post-comment: true                          # optional: PR comment with summary
 ```
@@ -197,28 +197,28 @@ This single step scans the repo, pushes results, and optionally posts a PR comme
 #### GitHub Actions (Manual Setup)
 
 ```yaml
-- name: Install Qaverity
-  run: npm install -g qaverity
+- name: Install Scantrix
+  run: npm install -g scantrix
 
 - name: Scan
-  run: qaverity . --out ./audit-out --format json,html,sarif
+  run: scantrix . --out ./audit-out --format json,html,sarif
 
 - name: Push Results to Dashboard
-  run: qaverity push ./audit-out/findings.json --key ${{ secrets.QAVERITY_API_KEY }} --url ${{ secrets.QAVERITY_API_URL }}
+  run: scantrix push ./audit-out/findings.json --key ${{ secrets.SCANTRIX_API_KEY }} --url ${{ secrets.SCANTRIX_API_URL }}
 ```
 
 #### Azure DevOps Pipelines
 
 ```yaml
 - script: |
-    npm install -g qaverity
-    qaverity "$(Build.SourcesDirectory)" --out "$(Build.ArtifactStagingDirectory)/audit" --format json,html,sarif
-  displayName: "Run Qaverity Audit"
+    npm install -g scantrix
+    scantrix "$(Build.SourcesDirectory)" --out "$(Build.ArtifactStagingDirectory)/audit" --format json,html,sarif
+  displayName: "Run Scantrix Audit"
 
 - script: |
-    qaverity push "$(Build.ArtifactStagingDirectory)/audit/findings.json" \
-      --key $(QAVERITY_API_KEY) \
-      --url $(QAVERITY_API_URL)
+    scantrix push "$(Build.ArtifactStagingDirectory)/audit/findings.json" \
+      --key $(SCANTRIX_API_KEY) \
+      --url $(SCANTRIX_API_URL)
   displayName: "Push to Dashboard"
 ```
 
@@ -227,8 +227,8 @@ Store these as CI secrets or pipeline variables:
 
 | Secret | Value | Example |
 |--------|-------|---------|
-| QAVERITY_API_KEY | Any string (API key authentication) | sk-qaverity-abc123 |
-| QAVERITY_API_URL | URL of your dashboard instance | https://qaverity.internal.com |
+| SCANTRIX_API_KEY | Any string (API key authentication) | sk-scantrix-abc123 |
+| SCANTRIX_API_URL | URL of your dashboard instance | https://scantrix.internal.com |
 
 ### Automatic Repo Name Detection
 You do not need to tell each pipeline which repo it is. The push command auto-detects the repo name from:
@@ -277,10 +277,10 @@ The dashboard runs on plain HTTP by default. For production, put it behind a rev
 ```nginx
 server {
     listen 443 ssl;
-    server_name qaverity.your-company.com;
+    server_name scantrix.your-company.com;
 
-    ssl_certificate     /etc/ssl/certs/qaverity.crt;
-    ssl_certificate_key /etc/ssl/private/qaverity.key;
+    ssl_certificate     /etc/ssl/certs/scantrix.crt;
+    ssl_certificate_key /etc/ssl/private/scantrix.key;
 
     location / {
         proxy_pass http://127.0.0.1:3000;
@@ -367,7 +367,7 @@ If a key is leaked:
 - The dashboard is fully self-contained with no telemetry or phone-home behavior
 
 ## Database
-The dashboard uses SQLite - a serverless, zero-configuration database stored as a single file at `qaverity.db`.
+The dashboard uses SQLite - a serverless, zero-configuration database stored as a single file at `scantrix.db`.
 
 - No database server required - no Postgres, MySQL, or MongoDB to install or maintain
 - Automatic schema creation - the database and tables are created automatically on first start
@@ -375,7 +375,7 @@ The dashboard uses SQLite - a serverless, zero-configuration database stored as 
 - Custom location - set the `DATABASE_PATH` environment variable to store the database elsewhere:
 
 ```bash
-DATABASE_PATH=/var/data/qaverity.db npm run start
+DATABASE_PATH=/var/data/scantrix.db npm run start
 ```
 
 ### Database Schema
@@ -390,7 +390,7 @@ DATABASE_PATH=/var/data/qaverity.db npm run start
 ## Frequently Asked Questions
 
 **Q: Do I need to install the dashboard in every repo?**
-No. The dashboard is deployed once. Each repo only needs the Qaverity CLI scanner (as a devDependency or via the GitHub Action).
+No. The dashboard is deployed once. Each repo only needs the Scantrix CLI scanner (as a devDependency or via the GitHub Action).
 
 **Q: Can I run the dashboard on my laptop?**
 Yes - `cd dashboard && npm run dev` starts it locally on port 3000. Great for evaluation. For team use, deploy it on a shared server.
@@ -399,7 +399,7 @@ Yes - `cd dashboard && npm run dev` starts it locally on port 3000. Great for ev
 No. It works fully offline and air-gapped. The only network requirement is that CI pipelines can reach it over your internal network.
 
 **Q: What happens if the dashboard is down when a pipeline tries to push?**
-The push command will fail with a connection error, but the scan still completes and the report files are still written locally. You can re-push later using `qaverity push <findings.json>`.
+The push command will fail with a connection error, but the scan still completes and the report files are still written locally. You can re-push later using `scantrix push <findings.json>`.
 
 **Q: How much disk space does the database use?**
 Approximately 1 MB per 100 scans. A team scanning 10 repos daily would use ~36 MB per year.
@@ -411,4 +411,4 @@ Yes. Next.js handles concurrent HTTP requests. SQLite in WAL mode supports concu
 Not yet. The dashboard UI is currently open to anyone who can reach it. Place it behind your corporate VPN or reverse proxy with SSO for access control. User authentication is planned for a future release.
 
 **Q: Can I use this with Cypress or Selenium repos too?**
-Yes. Qaverity supports Playwright, Cypress, and Selenium. The scanner auto-detects which framework(s) are present and applies the appropriate rules. All three frameworks push to the same dashboard.
+Yes. Scantrix supports Playwright, Cypress, and Selenium. The scanner auto-detects which framework(s) are present and applies the appropriate rules. All three frameworks push to the same dashboard.
