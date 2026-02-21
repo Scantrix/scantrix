@@ -1,0 +1,43 @@
+# Example: Add to your repo's .github/workflows/qaverity.yml
+#
+# This workflow runs Qaverity on every PR and posts a comment summary.
+# It also runs nightly for trend tracking.
+
+name: Qaverity Audit
+
+on:
+  pull_request:
+    branches: [main, master]
+  schedule:
+    # Run nightly at 2 AM UTC for trend tracking
+    - cron: "0 2 * * *"
+  workflow_dispatch: # Allow manual triggers
+
+permissions:
+  contents: read
+  pull-requests: write  # Required for PR comments
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run Qaverity Audit
+        uses: your-org/repo-audit-agent@v3
+        with:
+          repo-path: "."
+          output-dir: "./qaverity-out"
+          format: "md,html,json,sarif"
+          post-comment: "true"
+          fail-on-high: "false"
+          # Uncomment to push results to the Qaverity dashboard:
+          # api-key: ${{ secrets.QAVERITY_API_KEY }}
+
+      # Optional: Upload SARIF to GitHub Code Scanning
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ./qaverity-out/audit.sarif
+          category: qaverity
