@@ -208,9 +208,22 @@ It is intentionally:
 ### CLI Subcommands
 ```
 scantrix <repoPath> [--out <dir>] [--format md,html,json,sarif,email] [--no-trend]
+                    [--sink local|hub] [--json-path <path>]
+                    [--sqlite-path <path>] [--ingest-url <url>] [--token <tok>]
 scantrix init [dir]                          # Create starter .auditrc.json
 scantrix push [findings.json] --key <key>    # Push results to dashboard
 ```
+
+### Multi-Environment Sink Architecture (v5.0.0)
+Every scan produces a canonical `ScanResult` JSON payload (tool, version, runId, timestamps,
+repo metadata, findings, summary, inventory). Results are routed through pluggable **sinks**:
+
+| Mode | Env Var | Sinks Activated | Use Case |
+|------|---------|-----------------|----------|
+| `local` (default) | `SCANTRIX_SINK=local` | JSON file + SQLite | Developer workstation, local dashboard |
+| `hub` | `SCANTRIX_SINK=hub` | JSON file + HTTP POST | CI pipelines feeding a shared Postgres-backed dashboard |
+
+See `docs/CLI_ARCHITECTURE.md` for detailed architecture diagrams and setup instructions.
 
 ### Web Dashboard
 - **Next.js 14 + SQLite** under `dashboard/`
@@ -242,15 +255,34 @@ Scantrix turns complex automation systems into:
 npm run audit -- "C:\Repositories\Service.Playwright.Automation" --out "audit-out\service-pw-automation"
 ```
 
+### Scan and write canonical results JSON (recommended)
+```powershell
+node dist/cli.js "C:\path\to\repo" --out ./audit-out --json-path ./audit-out/scantrix-results.json
+```
+
+### Scan with local SQLite persistence (for local dashboard)
+```powershell
+node dist/cli.js "C:\path\to\repo" --out ./audit-out \
+  --sink local --json-path ./audit-out/scantrix-results.json \
+  --sqlite-path ./dashboard/data/scantrix.db
+```
+
+### Scan in hub mode (CI pipeline → shared dashboard)
+```powershell
+node dist/cli.js "$REPO_PATH" --out ./audit-out \
+  --sink hub --json-path ./audit-out/scantrix-results.json \
+  --ingest-url https://hub.example.com/api/ingest \
+  --token $SCANTRIX_TOKEN
+```
+
 ### Initialize config for a target repo
 ```powershell
 npx ts-node .\src\cli.ts init "C:\Repositories\Service.Playwright.Automation"
 ```
 
-### Push findings to the Scantrix dashboard
+### Push findings to the Scantrix dashboard (legacy push subcommand)
 ```powershell
 npx ts-node .\src\cli.ts push "audit-out\service-pw-automation\findings.json" --key YOUR_API_KEY
-
 ```
 
 ### Run tests
@@ -258,26 +290,17 @@ npx ts-node .\src\cli.ts push "audit-out\service-pw-automation\findings.json" --
 npm test
 ```
 
-### The dashboard is a Next.js app. To start it:
+### Start the dashboard (Next.js)
 ```powershell
-cd c:\Repositories\repo-audit-agent\dashboard
+cd dashboard
 npm run dev
 ```
 
 Then open http://localhost:3000 in a browser.
 
-However, the dashboard reads from its SQLite database, not the file-based snapshots in audit-out. To populate it with your scan data, you need to push findings after starting the dashboard:
+### Two trend systems exist
 
-
-```powershell
-cd c:\Repositories\repo-audit-agent
-npx ts-node src/cli.ts push "audit-out\service-pw-automation\findings.json" --key any-key-for-now --url http://localhost:3000
-```
-
-Two trend systems exist:
-```
-System	Storage	Populated by	View with
-CLI snapshots |	audit-out/snapshots/*.json	|Auto-saved every scan	| Console diff summary
-Web dashboard	| dashboard/data/scantrix.db	|scantrix push command	| http://localhost:3000/trends
-The snapshot you're looking at (meta.json) is from the CLI system. Each time you run a scan, the CLI auto-compares against the previous snapshot and prints a delta. To build up history in the web dashboard, push findings after each scan — or add --api-key / --api-url flags to your scan workflow so it pushes automatically.
-```
+| System | Storage | Populated by | View with |
+|--------|---------|-------------|-----------|
+| CLI snapshots | `audit-out/snapshots/*.json` | Auto-saved every scan | Console diff summary |
+| Web dashboard | `dashboard/data/scantrix.db` | `scantrix push` or SQLite sink | http://localhost:3000/trends |
