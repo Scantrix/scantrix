@@ -1,5 +1,87 @@
 # Changelog
 
+## [5.0.0] - 2026-02-21
+
+### Multi-Environment Sink Architecture — Local / Hub / Pipeline Support
+
+This release introduces the **sink architecture**: a pluggable result-routing system that
+lets the CLI produce a canonical `ScanResult` payload and route it to one or more storage
+backends depending on the execution environment.
+
+---
+
+### 🏗️ Canonical `ScanResult` Contract
+
+A new stable result contract (`src/scanResult.ts`) is emitted by every scan. It includes:
+
+| Field | Description |
+|-------|-------------|
+| `tool` | Always `"scantrix"` |
+| `version` | Tool version from `package.json` |
+| `runId` | UUID v4 — unique per scan |
+| `startedAt` / `completedAt` | ISO-8601 timestamps bracketing the scan |
+| `repo` | `{ path, name, branch, commit }` |
+| `findings` | Full array of findings with evidence |
+| `summary` | `{ total, high, medium, low, riskScore, riskGrade }` |
+| `inventory` | Repository inventory snapshot |
+
+All sinks consume this identical shape, ensuring consistent artifacts regardless of where
+the scan runs.
+
+- **Added:** `src/scanResult.ts` — `ScanResult` interface + `buildScanResult()` factory
+
+### 🔌 Pluggable Sink System
+
+Three sinks ship out of the box:
+
+| Sink | Module | Purpose |
+|------|--------|---------|
+| **JSON** | `src/sinks/jsonSink.ts` | Writes `ScanResult` to a file (zero dependencies) |
+| **SQLite** | `src/sinks/sqliteSink.ts` | Persists to local SQLite DB (optional `better-sqlite3`) |
+| **Hub** | `src/sinks/hubSink.ts` | POSTs `ScanResult` to a central Hub ingestion endpoint |
+
+Sink routing is determined by `SCANTRIX_SINK` (or `--sink`):
+- **`local`** (default): optional JSON file + optional SQLite DB
+- **`hub`**: optional JSON file + HTTP POST to Hub (requires `SCANTRIX_INGEST_URL` + `SCANTRIX_TOKEN`)
+
+Configuration is validated **before** the scan starts (fail-fast). Missing required
+values in hub mode cause an immediate error with a clear message.
+
+- **Added:** `src/sinks/types.ts` — `Sink` interface
+- **Added:** `src/sinks/index.ts` — `resolveSinkConfig()`, `buildSinks()`, re-exports
+- **Added:** `src/sinks/jsonSink.ts` — JSON file sink
+- **Added:** `src/sinks/sqliteSink.ts` — SQLite sink (dynamic import of `better-sqlite3`)
+- **Added:** `src/sinks/hubSink.ts` — Hub HTTP POST sink
+
+### ⚙️ New CLI Flags & Environment Variables
+
+| Flag | Env Variable | Description |
+|------|-------------|-------------|
+| `--sink local\|hub` | `SCANTRIX_SINK` | Sink mode (default: `local`) |
+| `--json-path <path>` | `SCANTRIX_JSON_PATH` | Write canonical results JSON to this path |
+| `--sqlite-path <path>` | `SCANTRIX_SQLITE_PATH` | Local SQLite DB path (local mode only) |
+| `--ingest-url <url>` | `SCANTRIX_INGEST_URL` | Hub ingestion endpoint (hub mode, required) |
+| `--token <tok>` | `SCANTRIX_TOKEN` | Bearer token for Hub auth (hub mode, required) |
+
+- **Changed:** `src/cli.ts` — integrated sink routing after scan completion; added
+  `startedAt` timestamp tracking, `ScanResult` building, and sequential sink writes with
+  per-sink error logging; updated usage text with new flags and env vars
+
+### ✅ Test Suite
+
+- **138 tests** across **11 test files** (up from 117 / 10)
+- **Added:** `tests/sinks.test.ts` — 21 tests covering `buildScanResult`, `resolveSinkConfig`,
+  `buildSinks`, and `JsonSink` integration (file I/O)
+
+### 📚 Documentation
+
+- **Added:** `docs/CLI_ARCHITECTURE.md` — Full architecture overview, data-flow diagrams,
+  environment modes, step-by-step customer setup guide
+- **Updated:** `CHANGELOG.md`, `readMe.md`, `PROJECT_CONTEXT.md`, `docs/DEPLOYMENT_GUIDE.md`,
+  `docs/CI_INTEGRATION.md`, `repo_audit_agent_project_overview_handoff_guide.md`
+
+---
+
 ## [4.3.0] - 2026-02-19
 
 ### Bug Fixes & Data Integrity — Missing Repo Handling, Linkified URLs, Aggregate Trend Accuracy
