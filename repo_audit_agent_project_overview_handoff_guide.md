@@ -169,17 +169,18 @@ Optional SARIF output (`--format sarif`) for GitHub Code Scanning / Azure DevOps
 ### Primary Goal
 > **Create a reusable, sellable engine that audits Playwright, Cypress, and Selenium repos and their CI pipelines for reliability and operational risk—without running tests.**
 
-### Current State (v4.2.0)
-Phase 2 is complete plus a major dashboard UX overhaul. The product now includes:
+### Current State (v5.0.0)
+Phase 2 is complete plus a major dashboard UX overhaul and the multi-environment sink architecture. The product now includes:
 - **50+ audit rules** across 3 frameworks (Playwright, Cypress, Selenium)
 - **AST-based config parsing** via TypeScript Compiler API
 - **Trend tracking** with auto-snapshots (including git branch/commit and inventory data), evidence-level diffs with Windows path normalization, and inventory-level deltas
 - **GitHub Action** for CI integration with PR comments and quality gates
-- **Push client** for sending findings + inventory to the Qaverity dashboard API
+- **Push client** for sending findings + inventory to the Scantrix dashboard API
+- **Multi-environment sink architecture** (v5.0.0): pluggable `ScanResult` routing to JSON file, SQLite (local mode), or Hub HTTP POST (pipeline mode → Postgres)
 - **Web dashboard** (Next.js 14 + SQLite) with collapsible sidebar navigation, repository detail page (grade cards, statistics, severity breakdown, priority files, recommended actions, findings table, config overview, scan history), trend visualization, and cross-repo comparison
 - **Inventory pipeline** — `repo_inventory.json` (with git branch/commit) flows from report → push → dashboard DB → detail page
 - **Git-aware reports** showing scanned branch and commit in the audit summary
-- **113 tests** across 10 test files
+- **138 tests** across 11 test files
 
 ### Long‑Term Vision
 This tool is meant to evolve into:
@@ -207,11 +208,13 @@ It is intentionally:
 
 ## Handoff Instructions for VS Code Agent
 
-### You are continuing work on Qaverity (Repo Audit Agent) v4.2.0.
+### You are continuing work on Scantrix (Repo Audit Agent) v5.0.0.
 
 Key files:
 - `src/scanner.ts` — Core orchestration, 50+ audit rules, framework detection, git metadata capture
-- `src/cli.ts` — CLI entry point with `scan`, `init`, `push` subcommands (push now includes inventory)
+- `src/cli.ts` — CLI entry point with `scan`, `init`, `push` subcommands; sink routing after scan
+- `src/scanResult.ts` — Canonical `ScanResult` contract (tool, version, runId, timestamps, repo, findings, summary, inventory)
+- `src/sinks/` — Pluggable sink system: `types.ts` (interface), `jsonSink.ts`, `sqliteSink.ts`, `hubSink.ts`, `index.ts` (config resolver + factory)
 - `src/report.ts` — Markdown, HTML, JSON, SARIF, email report generation; `repo_inventory.json` includes git branch/commit
 - `src/configExtractor.ts` — Playwright config parsing
 - `src/astConfigParser.ts` — AST-based config parser (TypeScript Compiler API)
@@ -219,19 +222,22 @@ Key files:
 - `src/cypressExtractor.ts` — Cypress project detection + config parsing
 - `src/diffTracker.ts` — Trend tracking: snapshots with git metadata + inventory, auto-baseline, evidence-level diffs with path normalization, inventory deltas
 - `src/auditConfig.ts` — `.auditrc.json` loading, merging, default generation
-- `src/pushClient.ts` — HTTP client for pushing findings + inventory to dashboard API
+- `src/pushClient.ts` — HTTP client for pushing findings + inventory to dashboard API (legacy push subcommand)
+- `src/scoring.ts` — Single source of truth for risk score/grade calculation
 - `action.yml` — GitHub Action (composite) for CI integration
 - `dashboard/` — Next.js 14 + SQLite web dashboard
 - `dashboard/src/components/sidebar.tsx` — Collapsible icon-driven sidebar navigation
 - `dashboard/src/app/repos/[name]/page.tsx` — Repository detail page (overview, stats, severity, priority files, actions, findings, config, scan history)
 - `dashboard/src/app/api/repos/[name]/route.ts` — Detail page API (returns repo, scan, findings, inventory, history)
 
-### Current State (v4.2.0)
-- Phase 2 complete + dashboard UX overhaul (v4.2.0)
+### Current State (v5.0.0)
+- Phase 2 complete + dashboard UX overhaul (v4.2.0) + multi-environment sink architecture (v5.0.0)
+- v5.0.0 additions: canonical `ScanResult` contract, pluggable sink system (JSON/SQLite/Hub), fail-fast config validation, `--sink`/`--json-path`/`--sqlite-path`/`--ingest-url`/`--token` flags
+- v4.3.0 additions: clickable scan history dates, missing repo handling, aggregate risk trend fix, timezone-fixed date labels, per-segment risk trend coloring
 - v4.2.0 additions: collapsible sidebar navigation, repository detail page with 8 sections, inventory pipeline (push sends repo_inventory.json → dashboard DB → detail page), git branch/commit in inventory
 - v4.1.0 additions: git-aware snapshots, Windows path normalization in diffs, inventory-level trend deltas, branch/commit in reports
 - 50+ audit rules across Playwright, Cypress, Selenium
-- 113 tests across 10 test files, all passing
+- 138 tests across 11 test files, all passing
 - TypeScript compiles cleanly (`tsc --noEmit`)
 - Dashboard backend API routes complete, frontend pages complete (including `/repos/[name]` detail)
 - GitHub Action with PR comments, quality gates, artifact upload
@@ -254,9 +260,9 @@ Key files:
 
 ## Prompt for Another Agent (Copy/Paste)
 
-You are working on **Qaverity** (Repo Audit Agent), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
+You are working on **Scantrix** (Repo Audit Agent), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
-**Version:** 4.2.0 | **Tests:** 113 | **Rules:** 50+
+**Version:** 5.0.0 | **Tests:** 138 | **Rules:** 50+
 
 Your goals:
 - Improve report clarity and executive readability

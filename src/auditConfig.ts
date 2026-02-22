@@ -84,7 +84,7 @@ export function getEffectiveSeverity(
  */
 export function generateDefaultConfig(): string {
   const config = {
-    "$schema": "https://qaverity.com/schemas/auditrc.json",
+    "$schema": "https://scantrix.com/schemas/auditrc.json",
     "rules": {
       "disabled": [] as string[],
       "severityOverrides": {} as Record<string, string>,

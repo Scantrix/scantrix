@@ -1,5 +1,87 @@
 # Changelog
 
+## [5.0.0] - 2026-02-21
+
+### Multi-Environment Sink Architecture — Local / Hub / Pipeline Support
+
+This release introduces the **sink architecture**: a pluggable result-routing system that
+lets the CLI produce a canonical `ScanResult` payload and route it to one or more storage
+backends depending on the execution environment.
+
+---
+
+### 🏗️ Canonical `ScanResult` Contract
+
+A new stable result contract (`src/scanResult.ts`) is emitted by every scan. It includes:
+
+| Field | Description |
+|-------|-------------|
+| `tool` | Always `"scantrix"` |
+| `version` | Tool version from `package.json` |
+| `runId` | UUID v4 — unique per scan |
+| `startedAt` / `completedAt` | ISO-8601 timestamps bracketing the scan |
+| `repo` | `{ path, name, branch, commit }` |
+| `findings` | Full array of findings with evidence |
+| `summary` | `{ total, high, medium, low, riskScore, riskGrade }` |
+| `inventory` | Repository inventory snapshot |
+
+All sinks consume this identical shape, ensuring consistent artifacts regardless of where
+the scan runs.
+
+- **Added:** `src/scanResult.ts` — `ScanResult` interface + `buildScanResult()` factory
+
+### 🔌 Pluggable Sink System
+
+Three sinks ship out of the box:
+
+| Sink | Module | Purpose |
+|------|--------|---------|
+| **JSON** | `src/sinks/jsonSink.ts` | Writes `ScanResult` to a file (zero dependencies) |
+| **SQLite** | `src/sinks/sqliteSink.ts` | Persists to local SQLite DB (optional `better-sqlite3`) |
+| **Hub** | `src/sinks/hubSink.ts` | POSTs `ScanResult` to a central Hub ingestion endpoint |
+
+Sink routing is determined by `SCANTRIX_SINK` (or `--sink`):
+- **`local`** (default): optional JSON file + optional SQLite DB
+- **`hub`**: optional JSON file + HTTP POST to Hub (requires `SCANTRIX_INGEST_URL` + `SCANTRIX_TOKEN`)
+
+Configuration is validated **before** the scan starts (fail-fast). Missing required
+values in hub mode cause an immediate error with a clear message.
+
+- **Added:** `src/sinks/types.ts` — `Sink` interface
+- **Added:** `src/sinks/index.ts` — `resolveSinkConfig()`, `buildSinks()`, re-exports
+- **Added:** `src/sinks/jsonSink.ts` — JSON file sink
+- **Added:** `src/sinks/sqliteSink.ts` — SQLite sink (dynamic import of `better-sqlite3`)
+- **Added:** `src/sinks/hubSink.ts` — Hub HTTP POST sink
+
+### ⚙️ New CLI Flags & Environment Variables
+
+| Flag | Env Variable | Description |
+|------|-------------|-------------|
+| `--sink local\|hub` | `SCANTRIX_SINK` | Sink mode (default: `local`) |
+| `--json-path <path>` | `SCANTRIX_JSON_PATH` | Write canonical results JSON to this path |
+| `--sqlite-path <path>` | `SCANTRIX_SQLITE_PATH` | Local SQLite DB path (local mode only) |
+| `--ingest-url <url>` | `SCANTRIX_INGEST_URL` | Hub ingestion endpoint (hub mode, required) |
+| `--token <tok>` | `SCANTRIX_TOKEN` | Bearer token for Hub auth (hub mode, required) |
+
+- **Changed:** `src/cli.ts` — integrated sink routing after scan completion; added
+  `startedAt` timestamp tracking, `ScanResult` building, and sequential sink writes with
+  per-sink error logging; updated usage text with new flags and env vars
+
+### ✅ Test Suite
+
+- **138 tests** across **11 test files** (up from 117 / 10)
+- **Added:** `tests/sinks.test.ts` — 21 tests covering `buildScanResult`, `resolveSinkConfig`,
+  `buildSinks`, and `JsonSink` integration (file I/O)
+
+### 📚 Documentation
+
+- **Added:** `docs/CLI_ARCHITECTURE.md` — Full architecture overview, data-flow diagrams,
+  environment modes, step-by-step customer setup guide
+- **Updated:** `CHANGELOG.md`, `readMe.md`, `PROJECT_CONTEXT.md`, `docs/DEPLOYMENT_GUIDE.md`,
+  `docs/CI_INTEGRATION.md`, `repo_audit_agent_project_overview_handoff_guide.md`
+
+---
+
 ## [4.3.0] - 2026-02-19
 
 ### Bug Fixes & Data Integrity — Missing Repo Handling, Linkified URLs, Aggregate Trend Accuracy
@@ -313,7 +395,7 @@ computeDiff(previous, current, {
 ###  Phase 2 Complete — Trend Tracking, CI Integration, Web Dashboard
 
 This release delivers the full Phase 2 product features: enhanced trend tracking with
-auto-snapshots, a GitHub Action for CI integration, a push client for the Qaverity
+auto-snapshots, a GitHub Action for CI integration, a push client for the Scantrix
 dashboard, CLI subcommands (`init`, `push`), and a complete Next.js web dashboard
 for historical audit data, trend visualization, and cross-repo comparison.
 
@@ -323,10 +405,10 @@ for historical audit data, trend visualization, and cross-repo comparison.
 
 | Module | Purpose |
 |--------|---------|
-| `src/pushClient.ts` | HTTP(S) client for pushing audit findings to the Qaverity dashboard API |
+| `src/pushClient.ts` | HTTP(S) client for pushing audit findings to the Scantrix dashboard API |
 | `dashboard/` | Next.js 14 web dashboard with SQLite backend |
 | `action.yml` | GitHub Action (composite) for CI integration |
-| `.github/workflows/qaverity-example.yml` | Example workflow for PR + nightly audits |
+| `.github/workflows/scantrix-example.yml` | Example workflow for PR + nightly audits |
 
 ### 🔄 Enhanced Trend Tracking & Diff Mode
 
@@ -358,9 +440,9 @@ The trend/diff subsystem (`src/diffTracker.ts`) has been substantially expanded:
 The CLI (`src/cli.ts`) now supports three modes:
 
 ```
-qaverity <repoPath> [--out <dir>] [--format ...] [--no-trend]   # Standard scan
-qaverity init [dir]                                              # Create starter .auditrc.json
-qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashboard
+scantrix <repoPath> [--out <dir>] [--format ...] [--no-trend]   # Standard scan
+scantrix init [dir]                                              # Create starter .auditrc.json
+scantrix push [findings.json] [--key <key>] [--url <url>]       # Push to dashboard
 ```
 
 **Standard scan enhancements:**
@@ -374,7 +456,7 @@ qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashbo
 
 **`push` subcommand:**
 - Reads `findings.json` and POSTs to the dashboard API with Bearer token auth
-- Supports `--key`, `--url`, `--repo` flags and `QAVERITY_API_KEY`, `QAVERITY_API_URL`, `QAVERITY_REPO_NAME` env vars
+- Supports `--key`, `--url`, `--repo` flags and `SCANTRIX_API_KEY`, `SCANTRIX_API_URL`, `SCANTRIX_REPO_NAME` env vars
 - Auto-infers repo name from `GITHUB_REPOSITORY` (GitHub Actions), `BUILD_REPOSITORY_NAME` (Azure DevOps), or cwd
 
 ### 🤖 GitHub Action (CI Integration)
@@ -389,10 +471,10 @@ qaverity push [findings.json] [--key <key>] [--url <url>]       # Push to dashbo
 | Outputs | `findings-count`, `high-count`, `medium-count`, `low-count`, `risk-grade`, `report-path` |
 | Artifacts | Auto-uploads audit artifacts (30-day retention) |
 | PR comments | Posts/updates a summary comment with grade, finding counts, diff delta, and top findings table |
-| Dashboard push | Optionally pushes findings to Qaverity dashboard API when `api-key` is provided |
+| Dashboard push | Optionally pushes findings to Scantrix dashboard API when `api-key` is provided |
 | Quality gate | `fail-on-high: true` fails the workflow if any high-severity findings exist |
 
-**`.github/workflows/qaverity-example.yml`** — Example workflow:
+**`.github/workflows/scantrix-example.yml`** — Example workflow:
 - Triggers on PR to main/master, nightly cron (2 AM UTC), manual dispatch
 - Includes optional SARIF upload to GitHub Code Scanning
 
@@ -427,10 +509,10 @@ A complete Next.js 14 web dashboard under `dashboard/`:
 | `/compare` | `compare/page.tsx` | Sortable comparison table, trend indicators (↑↓→), risk score bar chart |
 
 **UI design:**
-- Dark theme matching Qaverity indigo-blue brand palette
+- Dark theme matching Scantrix indigo-blue brand palette
 - Responsive card grid layout
 - Grade badges (A–F), severity badges, trend indicators (improving/degrading/stable)
-- Nav bar with Qaverity branding
+- Nav bar with Scantrix branding
 
 ### ✅ Test Suite
 

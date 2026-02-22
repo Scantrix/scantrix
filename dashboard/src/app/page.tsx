@@ -313,7 +313,7 @@ export default function DashboardPage() {
           <BarChart3 className="mb-4 h-6 w-6 text-muted-foreground/40" />
           <h3 className="title-font text-lg font-semibold text-muted-foreground">No repositories tracked yet</h3>
           <p className="mt-2 text-sm text-muted-foreground/70">
-            Push your first scan with: <code className="rounded bg-muted px-2 py-0.5 text-xs">qaverity push findings.json --key YOUR_API_KEY</code>
+            Push your first scan with: <code className="rounded bg-muted px-2 py-0.5 text-xs">scantrix push findings.json --key YOUR_API_KEY</code>
           </p>
         </Card>
       ) : (
