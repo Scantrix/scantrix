@@ -64,9 +64,11 @@ Fail-fast validation: hub mode requires `INGEST_URL` + `TOKEN` or the CLI exits 
 - Next.js 14 + SQLite (better-sqlite3)
 - `dashboard/src/lib/db.ts` — Database schema + queries (repos, scans, findings, api_keys)
 - `dashboard/src/lib/types.ts` — Shared TypeScript types
-- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name](?scan=id), trends, compare)
+- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name](?scan=id) (GET + DELETE), trends, compare)
 - `dashboard/src/app/` — Frontend pages (dashboard, repos, repos/[name] detail, trends, compare)
+- `dashboard/src/components/ui/confirm-dialog.tsx` — Reusable accessible confirmation dialog (native `<dialog>`, focus trap, backdrop dismiss)
 - `dashboard/src/components/sidebar.tsx` — Collapsible icon-driven sidebar navigation
+- Repos page (`/repos`) — Card grid with delete button (trash icon + Radix tooltip + confirmation dialog), optimistic removal on success
 - Repo detail page (`/repos/[name]`) — Overview cards, repository statistics (with git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, configuration overview, scan history (dates link to `?scan=<id>` for historical report). Supports `?scan=<id>` query param to view any historical scan with the full report layout.
 - Inventory pipeline: `push` sends `repo_inventory.json` data through to `summary_json` column for rendering on detail page
 

@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { usePathname } from "next/navigation";
+import NavLink from "@/components/nav-link";
 import {
   LayoutDashboard,
   FolderGit2,
@@ -38,7 +38,7 @@ export default function Sidebar() {
     >
       {/* ── Brand ── */}
       <div className="flex h-24 items-center gap-3 border-b border-border/40 px-4">
-        <Link href="/" className="flex items-center gap-3 overflow-hidden">
+        <NavLink href="/" className="flex items-center gap-3 overflow-hidden">
           <img
             src="/assets/scantrix-logo.svg"
             alt="SCANTRIX"
@@ -56,7 +56,7 @@ export default function Sidebar() {
               />
             </div>
           )}
-        </Link>
+        </NavLink>
       </div>
 
       {/* ── Nav items ── */}
@@ -64,7 +64,7 @@ export default function Sidebar() {
         {navItems.map(({ href, label, icon: Icon }) => {
           const active = isActive(href);
           return (
-            <Link
+            <NavLink
               key={href}
               href={href}
               title={collapsed ? label : undefined}
@@ -90,7 +90,7 @@ export default function Sidebar() {
               {active && collapsed && (
                 <span className="absolute right-2 top-1/2 h-1.5 w-1.5 -translate-y-1/2 rounded-full bg-primary" />
               )}
-            </Link>
+            </NavLink>
           );
         })}
       </nav>

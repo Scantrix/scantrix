@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import Spinner from "@/components/spinner";
-import Link from "next/link";
+import { useNavigationLoading } from "@/components/loading-provider";
+import NavLink from "@/components/nav-link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -31,7 +32,8 @@ interface TrendPoint {
   key: string;   // unique x-axis identity (ISO ts or date)
   label: string; // human-readable tick label
   date: string;
-  scan_id?: number; // DB primary key (per-repo only; absent for aggregate)
+  scan_id?: number;     // DB primary key (per-repo only; absent for aggregate)
+  total_scans?: number; // cumulative scan count (aggregate only)
   findings_count: number;
   high_count: number;
   medium_count: number;
@@ -217,6 +219,7 @@ export default function TrendsPage() {
   const [trendData, setTrendData] = useState<TrendPoint[]>([]);
   const [deltaData, setDeltaData] = useState<DeltaPoint[]>([]);
   const [loading, setLoading] = useState(true);
+  const { stopLoading } = useNavigationLoading();
 
   /* ── Fetch repos ── */
   useEffect(() => {
@@ -231,8 +234,8 @@ export default function TrendsPage() {
         // Default to "All Repos" aggregate
         setSelectedRepo("__all__");
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { setLoading(false); stopLoading(); });
+  }, [stopLoading]);
 
   /* ── Fetch trend data ── */
   useEffect(() => {
@@ -273,6 +276,7 @@ export default function TrendsPage() {
             label,
             date: dateStr,
             scan_id: typeof r.scan_id === "number" ? r.scan_id : undefined,
+            total_scans: typeof r.total_scans === "number" ? r.total_scans : undefined,
             findings_count: r.findings_count ?? r.total_findings ?? 0,
             high_count: r.high_count ?? r.total_high ?? 0,
             medium_count: r.medium_count ?? r.total_medium ?? 0,
@@ -285,9 +289,10 @@ export default function TrendsPage() {
         });
         setTrendData(withFiles);
         setLoading(false);
+        stopLoading();
       })
-      .catch(() => setLoading(false));
-  }, [selectedRepo]);
+      .catch(() => { setLoading(false); stopLoading(); });
+  }, [selectedRepo, stopLoading]);
 
   /* ── Fetch delta (resolved vs introduced) data ── */
   useEffect(() => {
@@ -346,8 +351,13 @@ export default function TrendsPage() {
     const avgFindings =
       Math.round(trendData.reduce((s, t) => s + t.findings_count, 0) / trendData.length * 10) / 10;
 
+    // For per-repo mode, trendData.length === actual scan count.
+    // For aggregate mode, data points are collapsed by date so we use
+    // the total_scans field from the last data point instead.
+    const totalScans = latest.total_scans ?? trendData.length;
+
     return {
-      scans: trendData.length,
+      scans: totalScans,
       grade: latest.risk_grade ?? riskGrade(latest.risk_score),
       score: latest.risk_score,
       scoreDelta: Math.round((latest.risk_score - prev.risk_score) * 10) / 10,
@@ -713,12 +723,12 @@ export default function TrendsPage() {
                     <TableRow key={i}>
                       <TableCell className="text-muted-foreground">
                         {t.scan_id != null ? (
-                          <Link
+                          <NavLink
                             href={`/repos/${encodeURIComponent(selectedRepo)}?scan=${t.scan_id}`}
                             className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                           >
                             {t.label}
-                          </Link>
+                          </NavLink>
                         ) : (
                           t.label
                         )}
