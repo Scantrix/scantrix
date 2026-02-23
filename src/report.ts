@@ -383,7 +383,7 @@ ${bodyHtml}
 
 async function loadFooterLogoDataUri(): Promise<string | undefined> {
   // Prefer a stable asset path; keep failure non-fatal.
-  const logoPath = path.join(process.cwd(), "assets", "qaverity-logo-wide copy.svg");
+  const logoPath = path.join(process.cwd(), "assets", "scantrix-logo-wide.svg");
   try {
     const bytes = await fs.readFile(logoPath);
     return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
@@ -1213,7 +1213,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(``);
 
   if (footerLogoDataUri) {
-    md.push(`<img class="report-footer-logo" src="${footerLogoDataUri}" alt="Qaverity" />`);
+    md.push(`<img class="report-footer-logo" src="${footerLogoDataUri}" alt="Scantrix" />`);
     md.push(``);
   }
   md.push(``);

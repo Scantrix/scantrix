@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getDb } from "@/lib/db";
 
 /**
- * POST /api/scans — Receive findings from the CLI `qaverity push` command.
+ * POST /api/scans — Receive findings from the CLI `scantrix push` command.
  *
  * Headers: Authorization: Bearer <api-key>
  * Body: { repoName, findings[], timestamp, findingsCount, highCount, mediumCount, lowCount }

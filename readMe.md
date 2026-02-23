@@ -1,4 +1,4 @@
-# Qaverity
+# Scantrix
 ### Eliminating Flaky Tests, Hidden CI Costs, and Automation Guesswork
 
 ---
@@ -42,7 +42,7 @@ They cannot answer the questions leadership actually asks:
 ---
 
 ## **Slide 3 — Our Solution**  
-# **Qaverity**
+# **Scantrix**
 
 A static analysis, configuration-aware auditing engine that evaluates:
 
@@ -59,7 +59,7 @@ It runs in minutes, requires **no test execution**, and is completely **read‑o
 ## **Slide 4 — What Makes It Different**  
 ### *Correlation, Not Linting*
 
-Qaverity doesn’t just flag issues — **it explains behavior**.
+Scantrix doesn't just flag issues — **it explains behavior**.
 
 It correlates:
 
@@ -96,7 +96,7 @@ Why this matters:
 ## **Slide 6 — CI Visibility You Don’t Have Today**  
 ### *CI Pipeline Consistency Analysis*
 
-Qaverity scans all pipeline YAML files and detects:
+Scantrix scans all pipeline YAML files and detects:
 
 - Which pipelines publish reports, traces, and test results  
 - Which pipelines set critical env vars (WORKERS, HEADLESS)  
@@ -132,7 +132,7 @@ This answers the critical question:
 ## **Slide 8 — Outputs Leadership Can Read**  
 ### *Not Logs — Reports*
 
-Qaverity produces:
+Scantrix produces:
 
 - Executive-friendly **Markdown reports**  
 - Structured **JSON** for dashboards or automation  
@@ -149,7 +149,7 @@ Reports are designed to be:
 ## **Slide 9 — Business Value**  
 ### *Why This Matters to the Organization*
 
-Qaverity helps teams:
+Scantrix helps teams:
 
 - Reduce flaky tests and false failures  
 - Cut CI runtime and infrastructure cost  
@@ -172,7 +172,7 @@ Qaverity helps teams:
 ## **Slide 11 — Strategic Vision**  
 ### *From Tool to Platform*
 
-Qaverity is designed to evolve into:
+Scantrix is designed to evolve into:
 
 - A paid repo-audit service  
 - A CI quality gate  
@@ -203,14 +203,27 @@ It is intentionally:
 - **Composite action** (`action.yml`) — drop into any repo's workflow
 - Auto-posts/updates PR comments with grade, finding counts, and top issues
 - Optional quality gate: `fail-on-high: true` blocks merges with high-severity findings
-- Pushes results to the Qaverity dashboard API
+- Pushes results to the Scantrix dashboard API
 
 ### CLI Subcommands
 ```
-qaverity <repoPath> [--out <dir>] [--format md,html,json,sarif,email] [--no-trend]
-qaverity init [dir]                          # Create starter .auditrc.json
-qaverity push [findings.json] --key <key>    # Push results to dashboard
+scantrix <repoPath> [--out <dir>] [--format md,html,json,sarif,email] [--no-trend]
+                    [--sink local|hub] [--json-path <path>]
+                    [--sqlite-path <path>] [--ingest-url <url>] [--token <tok>]
+scantrix init [dir]                          # Create starter .auditrc.json
+scantrix push [findings.json] --key <key>    # Push results to dashboard
 ```
+
+### Multi-Environment Sink Architecture (v5.0.0)
+Every scan produces a canonical `ScanResult` JSON payload (tool, version, runId, timestamps,
+repo metadata, findings, summary, inventory). Results are routed through pluggable **sinks**:
+
+| Mode | Env Var | Sinks Activated | Use Case |
+|------|---------|-----------------|----------|
+| `local` (default) | `SCANTRIX_SINK=local` | JSON file + SQLite | Developer workstation, local dashboard |
+| `hub` | `SCANTRIX_SINK=hub` | JSON file + HTTP POST | CI pipelines feeding a shared Postgres-backed dashboard |
+
+See `docs/CLI_ARCHITECTURE.md` for detailed architecture diagrams and setup instructions.
 
 ### Web Dashboard
 - **Next.js 14 + SQLite** under `dashboard/`
@@ -218,7 +231,7 @@ qaverity push [findings.json] --key <key>    # Push results to dashboard
 - **Repository detail page** (`/repos/[name]`) — grade cards, repository statistics (git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, Playwright & CI/CD configuration overview, scan history
 - **Inventory pipeline** — `push` sends `repo_inventory.json` through to the dashboard for configuration and statistics rendering
 - Historical scan data, trend charts, cross-repo comparison
-- Dark theme with Qaverity indigo-blue brand
+- Dark theme with Scantrix indigo-blue brand
 - API routes: `/api/scans`, `/api/repos`, `/api/repos/[name]`, `/api/trends`, `/api/compare`
 
 ---
@@ -227,7 +240,7 @@ qaverity push [findings.json] --key <key>    # Push results to dashboard
 # **We Don't Run Your Tests.  
 We Explain Them.**
 
-Qaverity turns complex automation systems into:
+Scantrix turns complex automation systems into:
 
 - Clear insights  
 - Prioritized actions  
@@ -242,15 +255,34 @@ Qaverity turns complex automation systems into:
 npm run audit -- "C:\Repositories\Service.Playwright.Automation" --out "audit-out\service-pw-automation"
 ```
 
+### Scan and write canonical results JSON (recommended)
+```powershell
+node dist/cli.js "C:\path\to\repo" --out ./audit-out --json-path ./audit-out/scantrix-results.json
+```
+
+### Scan with local SQLite persistence (for local dashboard)
+```powershell
+node dist/cli.js "C:\path\to\repo" --out ./audit-out \
+  --sink local --json-path ./audit-out/scantrix-results.json \
+  --sqlite-path ./dashboard/data/scantrix.db
+```
+
+### Scan in hub mode (CI pipeline → shared dashboard)
+```powershell
+node dist/cli.js "$REPO_PATH" --out ./audit-out \
+  --sink hub --json-path ./audit-out/scantrix-results.json \
+  --ingest-url https://hub.example.com/api/ingest \
+  --token $SCANTRIX_TOKEN
+```
+
 ### Initialize config for a target repo
 ```powershell
 npx ts-node .\src\cli.ts init "C:\Repositories\Service.Playwright.Automation"
 ```
 
-### Push findings to the Qaverity dashboard
+### Push findings to the Scantrix dashboard (legacy push subcommand)
 ```powershell
 npx ts-node .\src\cli.ts push "audit-out\service-pw-automation\findings.json" --key YOUR_API_KEY
-
 ```
 
 ### Run tests
@@ -258,26 +290,17 @@ npx ts-node .\src\cli.ts push "audit-out\service-pw-automation\findings.json" --
 npm test
 ```
 
-### The dashboard is a Next.js app. To start it:
+### Start the dashboard (Next.js)
 ```powershell
-cd c:\Repositories\repo-audit-agent\dashboard
+cd dashboard
 npm run dev
 ```
 
 Then open http://localhost:3000 in a browser.
 
-However, the dashboard reads from its SQLite database, not the file-based snapshots in audit-out. To populate it with your scan data, you need to push findings after starting the dashboard:
+### Two trend systems exist
 
-
-```powershell
-cd c:\Repositories\repo-audit-agent
-npx ts-node src/cli.ts push "audit-out\service-pw-automation\findings.json" --key any-key-for-now --url http://localhost:3000
-```
-
-Two trend systems exist:
-```
-System	Storage	Populated by	View with
-CLI snapshots |	audit-out/snapshots/*.json	|Auto-saved every scan	| Console diff summary
-Web dashboard	| dashboard/data/qaverity.db	|qaverity push command	| http://localhost:3000/trends
-The snapshot you're looking at (meta.json) is from the CLI system. Each time you run a scan, the CLI auto-compares against the previous snapshot and prints a delta. To build up history in the web dashboard, push findings after each scan — or add --api-key / --api-url flags to your scan workflow so it pushes automatically.
-```
+| System | Storage | Populated by | View with |
+|--------|---------|-------------|-----------|
+| CLI snapshots | `audit-out/snapshots/*.json` | Auto-saved every scan | Console diff summary |
+| Web dashboard | `dashboard/data/scantrix.db` | `scantrix push` or SQLite sink | http://localhost:3000/trends |

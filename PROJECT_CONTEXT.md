@@ -1,6 +1,6 @@
-You are working on Repo Audit Agent (Qaverity), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
+You are working on Repo Audit Agent (Scantrix), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
-**Version:** 4.2.0
+**Version:** 5.0.0
 
 Your goals:
 
@@ -22,11 +22,17 @@ reports.ts (clean, deduplicated, prioritized output)
 
 You should treat audit_summary.md as the primary product surface.
 
-## Architecture (v4.1.0)
+## Architecture (v5.0.0)
 
 ### Core CLI Modules
 - `src/scanner.ts` — Core orchestration, 50+ audit rules across Playwright/Cypress/Selenium, git metadata capture
-- `src/cli.ts` — CLI entry point with 3 modes: scan, init, push
+- `src/cli.ts` — CLI entry point with 3 modes: scan, init, push; sink routing after scan
+- `src/scanResult.ts` — Canonical `ScanResult` contract (tool, version, runId, timestamps, repo metadata, findings, summary, inventory)
+- `src/sinks/types.ts` — `Sink` interface
+- `src/sinks/jsonSink.ts` — JSON file sink (zero dependencies)
+- `src/sinks/sqliteSink.ts` — SQLite sink (optional `better-sqlite3`, dynamic import)
+- `src/sinks/hubSink.ts` — Hub HTTP POST sink for central ingestion
+- `src/sinks/index.ts` — `resolveSinkConfig()` fail-fast validation + `buildSinks()` factory
 - `src/report.ts` — Markdown, HTML, JSON, SARIF, email report generation (includes git branch in header)
 - `src/configExtractor.ts` — Playwright config parsing
 - `src/astConfigParser.ts` — AST-based config parser using TypeScript Compiler API
@@ -34,20 +40,35 @@ You should treat audit_summary.md as the primary product surface.
 - `src/cypressExtractor.ts` — Cypress project detection and config parsing
 - `src/diffTracker.ts` — Trend tracking: snapshots with git metadata + inventory, auto-baseline, evidence-level diffs with path normalization, inventory deltas
 - `src/auditConfig.ts` — `.auditrc.json` loading, merging, and default generation
-- `src/pushClient.ts` — HTTP client for pushing findings to the Qaverity dashboard API
+- `src/pushClient.ts` — HTTP client for pushing findings to the Scantrix dashboard API (legacy push subcommand)
 - `src/sarifFormatter.ts` — SARIF 2.1.0 output formatter
+- `src/scoring.ts` — Single source of truth for risk score/grade calculation
+
+### Sink Architecture (v5.0.0)
+Every scan produces a `ScanResult` payload routed through pluggable sinks:
+
+| Sink | Module | Purpose |
+|------|--------|---------|
+| JSON | `src/sinks/jsonSink.ts` | Writes results to file (always safe, zero deps) |
+| SQLite | `src/sinks/sqliteSink.ts` | Local DB for developer dashboard |
+| Hub | `src/sinks/hubSink.ts` | HTTP POST to central ingestion → Postgres |
+
+Configuration via `SCANTRIX_SINK=local|hub` + `SCANTRIX_JSON_PATH`, `SCANTRIX_SQLITE_PATH`, `SCANTRIX_INGEST_URL`, `SCANTRIX_TOKEN`.
+Fail-fast validation: hub mode requires `INGEST_URL` + `TOKEN` or the CLI exits before scanning.
 
 ### CI Integration
 - `action.yml` — GitHub Action (composite) for CI integration
-- `.github/workflows/qaverity-example.yml` — Example workflow
+- `.github/workflows/scantrix-example.yml` — Example workflow
 
 ### Web Dashboard (`dashboard/`)
 - Next.js 14 + SQLite (better-sqlite3)
 - `dashboard/src/lib/db.ts` — Database schema + queries (repos, scans, findings, api_keys)
 - `dashboard/src/lib/types.ts` — Shared TypeScript types
-- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name](?scan=id), trends, compare)
+- `dashboard/src/app/api/` — REST API routes (scans, repos, repos/[name](?scan=id) (GET + DELETE), trends, compare)
 - `dashboard/src/app/` — Frontend pages (dashboard, repos, repos/[name] detail, trends, compare)
+- `dashboard/src/components/ui/confirm-dialog.tsx` — Reusable accessible confirmation dialog (native `<dialog>`, focus trap, backdrop dismiss)
 - `dashboard/src/components/sidebar.tsx` — Collapsible icon-driven sidebar navigation
+- Repos page (`/repos`) — Card grid with delete button (trash icon + Radix tooltip + confirmation dialog), optimistic removal on success
 - Repo detail page (`/repos/[name]`) — Overview cards, repository statistics (with git branch/commit), severity breakdown, priority files, recommended actions, collapsible findings table, configuration overview, scan history (dates link to `?scan=<id>` for historical report). Supports `?scan=<id>` query param to view any historical scan with the full report layout.
 - Inventory pipeline: `push` sends `repo_inventory.json` data through to `summary_json` column for rendering on detail page
 
@@ -89,7 +110,7 @@ average risk score over time (up to the last 24 data points from `/api/trends`).
 | `TREND_GREEN/RED/BLUE` | HSL color constants |
 
 ### Test Suite
-- 113 tests across 10 test files (vitest 3.2.4)
+- 138 tests across 11 test files (vitest 3.2.4)
 - Fixture repos: bad-repo, good-repo, complex-config-repo, cypress-repo, selenium-repo, deprecated-repo
 
 First review the repo_audit_agent_project_overview_handoff_guide.md

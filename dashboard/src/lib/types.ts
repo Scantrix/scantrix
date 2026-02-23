@@ -1,5 +1,5 @@
 /**
- * Shared types for the Qaverity Dashboard API and frontend.
+ * Shared types for the Scantrix Dashboard API and frontend.
  */
 
 export interface Repo {

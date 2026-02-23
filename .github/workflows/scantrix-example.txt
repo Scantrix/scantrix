@@ -1,9 +1,9 @@
-# Example: Add to your repo's .github/workflows/qaverity.yml
+# Example: Add to your repo's .github/workflows/scantrix.yml
 #
-# This workflow runs Qaverity on every PR and posts a comment summary.
+# This workflow runs Scantrix on every PR and posts a comment summary.
 # It also runs nightly for trend tracking.
 
-name: Qaverity Audit
+name: Scantrix Audit
 
 on:
   pull_request:
@@ -23,21 +23,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Run Qaverity Audit
+      - name: Run Scantrix Audit
         uses: your-org/repo-audit-agent@v3
         with:
           repo-path: "."
-          output-dir: "./qaverity-out"
+          output-dir: "./scantrix-out"
           format: "md,html,json,sarif"
           post-comment: "true"
           fail-on-high: "false"
-          # Uncomment to push results to the Qaverity dashboard:
-          # api-key: ${{ secrets.QAVERITY_API_KEY }}
+          # Uncomment to push results to the Scantrix dashboard:
+          # api-key: ${{ secrets.SCANTRIX_API_KEY }}
 
       # Optional: Upload SARIF to GitHub Code Scanning
       - name: Upload SARIF
         if: always()
         uses: github/codeql-action/upload-sarif@v3
         with:
-          sarif_file: ./qaverity-out/audit.sarif
-          category: qaverity
+          sarif_file: ./scantrix-out/audit.sarif
+          category: scantrix

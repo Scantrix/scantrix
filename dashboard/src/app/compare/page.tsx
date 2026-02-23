@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import Spinner from "@/components/spinner";
-import Link from "next/link";
+import NavLink from "@/components/nav-link";
+import { useNavigationLoading } from "@/components/loading-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -67,15 +68,18 @@ export default function ComparePage() {
   const [sortBy, setSortBy] = useState<SortField>("risk_score");
   const [sortAsc, setSortAsc] = useState(false);
 
+  const { stopLoading } = useNavigationLoading();
+
   useEffect(() => {
     fetch("/api/compare")
       .then((r) => r.json())
       .then((d) => {
         setData(d.comparisons ?? []);
         setLoading(false);
+        stopLoading();
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { setLoading(false); stopLoading(); });
+  }, [stopLoading]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) setSortAsc(!sortAsc);
@@ -188,9 +192,9 @@ export default function ComparePage() {
                   {sorted.map((r) => (
                     <TableRow key={r.repo_name}>
                       <TableCell className="font-medium">
-                        <Link href={`/repos/${encodeURIComponent(r.repo_name)}`} className="text-primary hover:underline">
+                        <NavLink href={`/repos/${encodeURIComponent(r.repo_name)}`} className="text-primary hover:underline">
                           {r.repo_name}
-                        </Link>
+                        </NavLink>
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={`text-xl font-bold ${gradeColor[r.risk_grade] ?? ""}`}>

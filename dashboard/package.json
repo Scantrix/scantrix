@@ -1,8 +1,8 @@
 {
-  "name": "qaverity-dashboard",
+  "name": "scantrix-dashboard",
   "version": "1.0.0",
   "private": true,
-  "description": "Qaverity Web Dashboard — historical audit results, trending risk scores, repo comparison",
+  "description": "Scantrix Web Dashboard — historical audit results, trending risk scores, repo comparison",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

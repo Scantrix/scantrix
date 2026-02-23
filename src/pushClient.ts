@@ -12,7 +12,7 @@ export interface PushOptions {
 }
 
 /**
- * Push scan findings to the Qaverity dashboard API.
+ * Push scan findings to the Scantrix dashboard API.
  *
  * POST <apiUrl>/api/scans
  * Headers: Authorization: Bearer <apiKey>
@@ -48,7 +48,7 @@ export async function pushFindings(options: PushOptions): Promise<void> {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${apiKey}`,
-          "User-Agent": "qaverity-cli",
+          "User-Agent": "scantrix-cli",
           "Content-Length": Buffer.byteLength(body),
         },
       },

@@ -9,7 +9,7 @@ describe("generateDefaultConfig", () => {
 
   it("includes $schema field", () => {
     const config = JSON.parse(generateDefaultConfig());
-    expect(config.$schema).toContain("qaverity.com");
+    expect(config.$schema).toContain("scantrix.com");
   });
 
   it("has empty disabled rules array", () => {
