@@ -69,23 +69,29 @@ export async function GET(request: NextRequest) {
     // Build rolling latest-per-repo state; capture the portfolio snapshot
     // at each unique date (last write wins for same date).
     const latestByRepo = new Map<number, ScanRow>();
-    const stateByDate = new Map<string, {
+    interface AggregatePoint {
       date: string;
+      total_scans: number;
       total_findings: number;
       total_high: number;
       total_medium: number;
       total_low: number;
       avg_risk_score: number;
       total_files_affected: number;
-    }>();
+    }
+
+    const stateByDate = new Map<string, AggregatePoint>();
+    let cumulativeScans = 0;
 
     for (const scan of allScans) {
       latestByRepo.set(scan.repo_id, scan);
+      cumulativeScans++;
 
       const values = [...latestByRepo.values()];
       const n = values.length;
       stateByDate.set(scan.date, {
         date: scan.date,
+        total_scans: cumulativeScans,
         total_findings: values.reduce((s, v) => s + v.findings_count, 0),
         total_high: values.reduce((s, v) => s + v.high_count, 0),
         total_medium: values.reduce((s, v) => s + v.medium_count, 0),

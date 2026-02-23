@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import Link from "next/link";
+import NavLink from "@/components/nav-link";
+import { useNavigationLoading } from "@/components/loading-provider";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,6 +69,7 @@ export default function DashboardPage() {
   const [trends, setTrends] = useState<TrendRow[]>([]);
   const [query, setQuery] = useState("");
   const [tierFilter, setTierFilter] = useState("all");
+  const { stopLoading } = useNavigationLoading();
 
   useEffect(() => {
     fetch("/api/repos")
@@ -75,9 +77,10 @@ export default function DashboardPage() {
       .then((data) => {
         setRepos(data.repos ?? []);
         setLoading(false);
+        stopLoading();
       })
-      .catch(() => setLoading(false));
-  }, []);
+      .catch(() => { setLoading(false); stopLoading(); });
+  }, [stopLoading]);
 
   useEffect(() => {
     fetch("/api/trends?limit=24")
@@ -374,9 +377,9 @@ export default function DashboardPage() {
                   filteredRepos.map((r) => (
                     <TableRow key={r.id} className="transition-colors hover:bg-muted/40">
                       <TableCell className="font-medium">
-                        <Link href={`/repos/${encodeURIComponent(r.name)}`} className="text-primary hover:underline">
+                        <NavLink href={`/repos/${encodeURIComponent(r.name)}`} className="text-primary hover:underline">
                           {r.name}
-                        </Link>
+                        </NavLink>
                       </TableCell>
                       <TableCell className="text-center">
                         <span className={`text-xl font-bold ${gradeColor[r.risk_grade ?? ""] ?? ""}`}>

@@ -1,5 +1,23 @@
 # Changelog
 
+## [5.0.1] - 2026-02-22
+
+### Dashboard — Delete Repository
+
+- **DELETE `/api/repos/[name]`** — New API endpoint that transactionally removes a repository
+  and all its scans + findings from the SQLite database.
+- **Trash icon on repo cards** — Each card on the `/repos` page now shows a trash-can icon
+  (bottom-right, visible on hover) with a "Delete repository" tooltip.
+- **Confirmation dialog** — Clicking the icon opens a destructive confirmation dialog
+  (`ConfirmDialog` component) before executing the delete.
+- **Error handling** — Delete failures surface an inline error toast; the dialog shows
+  a loading state ("Deleting…") while the request is in flight.
+- **New reusable component** — `dashboard/src/components/ui/confirm-dialog.tsx` — accessible
+  confirmation dialog built on the native `<dialog>` element with focus trap, Escape-to-close,
+  and backdrop-click dismiss.
+
+---
+
 ## [5.0.0] - 2026-02-21
 
 ### Multi-Environment Sink Architecture — Local / Hub / Pipeline Support

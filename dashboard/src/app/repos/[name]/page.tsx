@@ -2,9 +2,10 @@
 
 import React from "react";
 import Spinner from "@/components/spinner";
+import { useNavigationLoading } from "@/components/loading-provider";
 import { useEffect, useState } from "react";
 import { useParams, useSearchParams } from "next/navigation";
-import Link from "next/link";
+import NavLink from "@/components/nav-link";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -620,6 +621,7 @@ export default function RepoDetailPage() {
   const [data, setData] = useState<RepoDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { stopLoading } = useNavigationLoading();
 
   useEffect(() => {
     setLoading(true);
@@ -632,9 +634,9 @@ export default function RepoDetailPage() {
         if (!r.ok) throw new Error(r.status === 404 ? "Repository not found" : "Failed to load");
         return r.json();
       })
-      .then((d) => { setData(d); setLoading(false); })
-      .catch((e) => { setError(e.message); setLoading(false); });
-  }, [repoName, scanIdParam]);
+      .then((d) => { setData(d); setLoading(false); stopLoading(); })
+      .catch((e) => { setError(e.message); setLoading(false); stopLoading(); });
+  }, [repoName, scanIdParam, stopLoading]);
 
   if (loading) {
     return (
@@ -649,9 +651,9 @@ export default function RepoDetailPage() {
       <div className="flex flex-col items-center justify-center h-96 gap-4 animate-fade-in">
         <AlertTriangle className="h-12 w-12 text-muted-foreground/40" />
         <h2 className="text-lg font-semibold text-muted-foreground">{error ?? "Repository not found"}</h2>
-        <Link href="/repos" className="text-sm text-primary hover:underline">
+        <NavLink href="/repos" className="text-sm text-primary hover:underline">
           &larr; Back to Repositories
-        </Link>
+        </NavLink>
       </div>
     );
   }
@@ -670,13 +672,13 @@ export default function RepoDetailPage() {
     <div className="space-y-8 animate-fade-in">
       {/* ── Breadcrumb & Header ── */}
       <div>
-        <Link
+        <NavLink
           href="/repos"
           className="inline-flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors mb-4"
         >
           <ArrowLeft className="h-4 w-4" />
           Repositories
-        </Link>
+        </NavLink>
         <div className="flex items-center gap-4">
           <h1 className="text-3xl font-bold tracking-tight">{repo.name}</h1>
           {grade !== "—" && (
@@ -696,12 +698,12 @@ export default function RepoDetailPage() {
           <div className="mt-2 flex items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-sm text-amber-300">
             <AlertTriangle className="h-4 w-4 shrink-0" />
             You are viewing a historical scan report.
-            <Link
+            <NavLink
               href={`/repos/${encodeURIComponent(repo.name)}`}
               className="ml-auto text-xs text-blue-400 hover:underline whitespace-nowrap"
             >
               View latest &rarr;
-            </Link>
+            </NavLink>
           </div>
         )}
       </div>
@@ -1215,12 +1217,12 @@ export default function RepoDetailPage() {
                 {scanHistory.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell className="text-muted-foreground text-sm">
-                      <Link
+                      <NavLink
                         href={`/repos/${encodeURIComponent(repo.name)}?scan=${s.id}`}
                         className="text-blue-400 hover:text-blue-300 hover:underline transition-colors"
                       >
                         {formatDate(s.scanned_at)}
-                      </Link>
+                      </NavLink>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className={`font-bold ${gradeColor[s.risk_grade ?? ""] ?? ""}`}>
