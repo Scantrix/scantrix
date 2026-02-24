@@ -39,8 +39,19 @@
 
   <!-- Wordmark: single text element — browser handles natural kerning -->
   <text class="st3" x="1280" y="1750">
-    <tspan fill="#e5e7eb">SC</tspan><tspan fill="#e5e7eb">&#923;</tspan><tspan fill="#e5e7eb">NTRIX</tspan>
+    <tspan fill="#e5e7eb">SC</tspan><tspan fill="#e5e7eb">&#923;</tspan><tspan fill="#e5e7eb">NTR</tspan>
   </text>
+
+    <!-- dot over the "i" -->
+    17<circle cx="5286" cy="1160" r="77" fill="#4c79f6" opacity="0.9"/>
+
+     <!-- Decorative accent line used as the i -->
+    <rect x="5210" y="1300" width="151" height="460" rx="1" fill="#e5e7eb" opacity="0.9"/>
+
+  <text class="st3" x="5450" y="1750">
+    <tspan fill="#e5e7eb">X</tspan>
+  </text>
+
 
   <!-- Tagline: font-size set directly, no scale() transform -->
   <!--

@@ -86,6 +86,26 @@ describe("bad-repo", () => {
     expect(hasFinding(results, "ARCH-009")).toBe(true);
   });
 
+  it("detects hardcoded inline test data (ARCH-010)", () => {
+    expect(hasFinding(results, "ARCH-010")).toBe(true);
+    const f = getFinding(results, "ARCH-010")!;
+    expect(f.severity).toBe("low");
+  });
+
+  // ── Stability ────────────────────────────────────────────────
+  it("detects browser resource leaks (PW-STABILITY-005)", () => {
+    expect(hasFinding(results, "PW-STABILITY-005")).toBe(true);
+    const f = getFinding(results, "PW-STABILITY-005")!;
+    expect(f.severity).toBe("medium");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(1);
+  });
+
+  it("detects over-asserted tests (PW-STABILITY-006)", () => {
+    expect(hasFinding(results, "PW-STABILITY-006")).toBe(true);
+    const f = getFinding(results, "PW-STABILITY-006")!;
+    expect(f.severity).toBe("low");
+  });
+
   // ── CI ─────────────────────────────────────────────────────────
   it("detects missing report publishing (CI-002)", () => {
     expect(hasFinding(results, "CI-002")).toBe(true);
@@ -108,7 +128,7 @@ describe("bad-repo", () => {
 
   // ── Inventory ──────────────────────────────────────────────────
   it("counts test files correctly", () => {
-    expect(results.inventory.testFiles).toBe(3);
+    expect(results.inventory.testFiles).toBe(5);
   });
 
   it("detects Playwright config", () => {
@@ -147,6 +167,18 @@ describe("good-repo", () => {
 
   it("does NOT flag hardcoded URLs (baseURL is configured)", () => {
     expect(hasFinding(results, "PW-INSIGHT-010")).toBe(false);
+  });
+
+  it("does NOT flag resource leaks (uses fixtures)", () => {
+    expect(hasFinding(results, "PW-STABILITY-005")).toBe(false);
+  });
+
+  it("does NOT flag over-asserted tests", () => {
+    expect(hasFinding(results, "PW-STABILITY-006")).toBe(false);
+  });
+
+  it("does NOT flag inline test data", () => {
+    expect(hasFinding(results, "ARCH-010")).toBe(false);
   });
 
   it("has Playwright config detected", () => {

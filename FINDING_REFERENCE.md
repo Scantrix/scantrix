@@ -19,6 +19,8 @@
 | PW-STABILITY-003 | Page fixture in beforeAll | 🔴 HIGH | `test.beforeAll(async ({ page }) => ...)` usage |
 | PW-STABILITY-002 | Poor test organization | 🟠 MEDIUM | 10+ tests without describe blocks |
 | PW-STABILITY-004 | Tests without assertions | 🟠 MEDIUM | expect() calls < 50% of test count |
+| PW-STABILITY-005 | Browser resource leak risk | 🟠 MEDIUM | Manual browser/context/page creation without cleanup in afterEach/afterAll |
+| PW-STABILITY-006 | Too many assertions per test | 🟡 LOW | >5 expect() calls in a single test body (≥3 tests over threshold) |
 
 ### Locator Findings (PW-LOC-*)
 | ID | Title | Severity | Description |
@@ -86,6 +88,7 @@
 | ARCH-007 | No custom error types | 🟡 LOW | Generic Error throws without custom classes |
 | ARCH-008 | Large inline test data | 🟡 LOW | Data blocks ≥50 lines inline in test files |
 | ARCH-009 | Inline config overrides | 🟡 LOW | timeout/retries set inline in test() calls (≥3 occurrences) |
+| ARCH-010 | Hardcoded inline test data | 🟡 LOW | Variable-anchored inline data (usernames, addresses, dates, prices) in ≥2 files |
 
 ### Deprecated API Findings (PW-DEPREC-*)
 | ID | Title | Severity | Description |
@@ -122,6 +125,7 @@
 | SE-FLAKE-001 | Hard waits (sleep) | 🔴 HIGH | `Thread.sleep()`, `time.sleep()`, `driver.sleep()` |
 | SE-FLAKE-002 | Implicit waits | 🟠 MEDIUM | `implicitly_wait()` / `implicitlyWait()` |
 | SE-LOC-001 | XPath selectors | 🟡 LOW | `By.xpath()`, `By.XPATH` usage |
+| SE-STABILITY-001 | WebDriver resource leak risk | 🟠 MEDIUM | WebDriver creation without `driver.quit()` in teardown hook |
 
 ## Severity Prioritization Guide
 

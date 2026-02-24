@@ -1,5 +1,38 @@
 # Changelog
 
+## [5.1.0] - 2026-02-24
+
+### New Audit Rules — Resource Leaks, Over-Assertion, Inline Test Data
+
+- **PW-STABILITY-005** (Medium) — Detects manual `chromium.launch()` / `browser.newContext()`
+  / `browser.newPage()` without corresponding `.close()` in afterEach/afterAll. Skips files
+  using Playwright's auto-cleaning `({ page })` fixture pattern.
+- **SE-STABILITY-001** (Medium) — Detects Selenium WebDriver creation (`webdriver.Chrome()`,
+  `new ChromeDriver()`, etc.) without `driver.quit()` in a teardown hook. Cross-language
+  support: Python, Java, TypeScript, JavaScript.
+- **PW-STABILITY-006** (Low) — Flags individual tests with >5 `expect()` assertions.
+  Tests that verify too many behaviors are harder to debug. Only emits when ≥3 tests exceed
+  the threshold. Skips data-driven loops.
+- **ARCH-010** (Low) — Cross-framework detection of hardcoded inline test data (usernames,
+  addresses, dates, prices, credit cards, zip codes) in test files. Requires variable-name-
+  anchored patterns (e.g., `firstName = 'John'`) to avoid false positives. Scans Playwright,
+  Cypress, and Selenium test files.
+
+### Report & Scoring
+
+- New findings integrate with existing scoring: ARCH-010 gets the 1.2x architecture multiplier.
+- `categorizeFindings()` and `calculateRemediationTime()` updated with effort estimates for
+  all 4 new rules.
+
+### Test Fixtures
+
+- New bad-repo fixtures: `resource-leak.spec.ts`, `over-asserted.spec.ts`
+- New selenium-repo fixture: `test_checkout.py` (resource leak + inline data)
+- New cypress-repo fixture: `checkout.cy.ts` (inline data)
+- Modified bad-repo `checkout.spec.ts` with inline data patterns
+
+---
+
 ## [5.0.1] - 2026-02-22
 
 ### Dashboard — Delete Repository

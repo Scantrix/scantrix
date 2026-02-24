@@ -110,6 +110,24 @@ Using the `page` fixture in `beforeAll` shares browser state across tests and ca
 
 Tests without assertions never fail and provide no signal. When retries are enabled this is superseded by PW-INSIGHT-011.
 
+### PW-STABILITY-005 — Browser resource leak risk
+| Property | Value |
+|----------|-------|
+| Severity | **Medium** |
+| Category | Stability |
+| Patterns | `chromium.launch()`, `browser.newContext()`, `browser.newPage()` without corresponding `.close()` |
+
+Manual browser/context/page creation without cleanup in afterEach/afterAll leaks resources. Use Playwright fixtures (({ page })) which auto-cleanup.
+
+### PW-STABILITY-006 — Too many assertions per test
+| Property | Value |
+|----------|-------|
+| Severity | **Low** |
+| Category | Stability |
+| Trigger | >5 expect() calls in a single test body |
+
+Tests with excessive assertions verify too many behaviors at once, making failures harder to debug. Split into focused tests.
+
 ---
 
 ## Locator Rules (PW-LOC-*)
@@ -347,6 +365,17 @@ Large data blocks inline in test files. Extract to JSON fixtures or data factori
 | Threshold | ≥3 occurrences across the repo |
 
 Tests overriding `timeout` or `retries` inline. Use `test.use()` or project config instead.
+
+### ARCH-010 — Hardcoded inline test data
+| Property | Value |
+|----------|-------|
+| Severity | **Low** |
+| Category | Architecture |
+| Scope | Cross-framework (Playwright, Cypress, Selenium) |
+| Analysis | Detects variable-name-anchored inline data: usernames, addresses, dates, prices, credit cards, zip codes |
+| Threshold | ≥3 matches per file, ≥2 files total |
+
+Inline test data (usernames, addresses, dates, prices) should be extracted to fixture files or generated with faker/data factories for easier maintenance and reuse.
 
 ---
 
@@ -690,3 +719,12 @@ Mixing implicit and explicit waits causes unpredictable wait behavior. Use expli
 | Patterns | `By.xpath()`, `By.XPATH`, `find_element(By.XPATH, ...)` |
 
 XPath selectors are verbose and fragile. Prefer CSS selectors, `By.id`, `By.name`, or data-testid attributes.
+
+### SE-STABILITY-001 — WebDriver resource leak risk
+| Property | Value |
+|----------|-------|
+| Severity | **Medium** |
+| Category | Stability |
+| Patterns | `webdriver.Chrome()`, `new ChromeDriver()` without `driver.quit()` in teardown |
+
+Selenium has no auto-cleanup. Missing `driver.quit()` in teardown leaks browser processes.

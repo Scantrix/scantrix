@@ -123,4 +123,10 @@ describe("selenium-repo", () => {
     const f = getFinding(results, "SE-LOC-001")!;
     expect(f.evidence.length).toBeGreaterThanOrEqual(3);
   });
+
+  it("detects WebDriver resource leaks (SE-STABILITY-001)", () => {
+    expect(hasFinding(results, "SE-STABILITY-001")).toBe(true);
+    const f = getFinding(results, "SE-STABILITY-001")!;
+    expect(f.severity).toBe("medium");
+  });
 });

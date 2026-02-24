@@ -1160,6 +1160,231 @@ function analyzeErrorHandling(filePath: string, content: string): ErrorHandlingA
   };
 }
 
+// ── Resource Leak Detection ─────────────────────────────────────────
+
+type ResourceLeakResult = {
+  file: string;
+  creationPatterns: string[];
+  line: number;
+};
+
+function findBrowserResourceLeaks(filePath: string, content: string): ResourceLeakResult[] {
+  const results: ResourceLeakResult[] = [];
+
+  // Skip files that only use fixture destructuring (auto-cleanup)
+  if (/test\s*\([^)]*,\s*async\s*\(\s*\{[^}]*\b(?:page|browser|context)\b/.test(content) &&
+      !/chromium\.launch|firefox\.launch|webkit\.launch|browser\.newContext\(|browser\.newPage\(|context\.newPage\(/.test(content)) {
+    return results;
+  }
+
+  const creationPatterns = [
+    /\b(?:chromium|firefox|webkit)\.launch\s*\(/g,
+    /\bbrowser\.newContext\s*\(/g,
+    /\bbrowser\.newPage\s*\(/g,
+    /\bcontext\.newPage\s*\(/g,
+  ];
+
+  const cleanupPatterns = [
+    /\bbrowser\.close\s*\(/,
+    /\bcontext\.close\s*\(/,
+    /\bpage\.close\s*\(/,
+  ];
+
+  const hookPattern = /\b(?:afterEach|afterAll|test\.afterEach|test\.afterAll)\s*\(/;
+
+  const lines = content.split(/\r?\n/);
+  const foundCreations: Array<{ pattern: string; line: number }> = [];
+
+  for (const re of creationPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const lineNum = lineNumberAtIndex(content, m.index);
+      const lineText = lines[lineNum - 1]?.trim() ?? "";
+      if (!lineText.startsWith("//") && !lineText.startsWith("*")) {
+        foundCreations.push({ pattern: m[0], line: lineNum });
+      }
+    }
+  }
+
+  if (foundCreations.length === 0) return results;
+
+  // Check if cleanup exists in an afterEach/afterAll hook
+  const hasCleanup = cleanupPatterns.some((p) => p.test(content));
+  const hasHook = hookPattern.test(content);
+  const cleanupInHook = hasCleanup && hasHook;
+
+  if (!cleanupInHook) {
+    results.push({
+      file: filePath,
+      creationPatterns: foundCreations.map((c) => c.pattern),
+      line: foundCreations[0].line,
+    });
+  }
+
+  return results;
+}
+
+function findSeleniumResourceLeaks(filePath: string, content: string): ResourceLeakResult[] {
+  const results: ResourceLeakResult[] = [];
+
+  const creationPatterns = [
+    /\bwebdriver\.Chrome\s*\(/g,
+    /\bwebdriver\.Firefox\s*\(/g,
+    /\bwebdriver\.Edge\s*\(/g,
+    /\bwebdriver\.Safari\s*\(/g,
+    /\bwebdriver\.Remote\s*\(/g,
+    /\bnew\s+ChromeDriver\s*\(/g,
+    /\bnew\s+FirefoxDriver\s*\(/g,
+    /\bnew\s+RemoteWebDriver\s*\(/g,
+  ];
+
+  const cleanupPattern = /\.quit\s*\(/;
+  const teardownPattern = /\bteardown_method\b|\btearDown\b|\b@After\b|\bafterEach\b|\bafterAll\b/;
+
+  const lines = content.split(/\r?\n/);
+  const foundCreations: Array<{ pattern: string; line: number }> = [];
+
+  for (const re of creationPatterns) {
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(content)) !== null) {
+      const lineNum = lineNumberAtIndex(content, m.index);
+      const lineText = lines[lineNum - 1]?.trim() ?? "";
+      if (!lineText.startsWith("#") && !lineText.startsWith("//") && !lineText.startsWith("*")) {
+        foundCreations.push({ pattern: m[0], line: lineNum });
+      }
+    }
+  }
+
+  if (foundCreations.length === 0) return results;
+
+  const hasCleanup = cleanupPattern.test(content);
+  const hasTeardown = teardownPattern.test(content);
+  const cleanupInTeardown = hasCleanup && hasTeardown;
+
+  if (!cleanupInTeardown) {
+    results.push({
+      file: filePath,
+      creationPatterns: foundCreations.map((c) => c.pattern),
+      line: foundCreations[0].line,
+    });
+  }
+
+  return results;
+}
+
+// ── Over-Assertion Detection ────────────────────────────────────────
+
+type OverAssertedTest = {
+  file: string;
+  testName: string;
+  assertionCount: number;
+  line: number;
+};
+
+function findOverAssertedTests(filePath: string, content: string): OverAssertedTest[] {
+  const results: OverAssertedTest[] = [];
+
+  // Find test boundaries using test( or test.only(
+  const testStartRe = /\btest(?:\.only)?\s*\(\s*(['"`])((?:(?!\1).)*)\1/g;
+  let m: RegExpExecArray | null;
+
+  while ((m = testStartRe.exec(content)) !== null) {
+    const testName = m[2];
+    const testLine = lineNumberAtIndex(content, m.index);
+
+    // Find the arrow function body opening brace (=> {), skipping destructuring braces
+    const afterMatch = content.slice(m.index + m[0].length);
+    const arrowMatch = afterMatch.match(/=>\s*\{/);
+    if (!arrowMatch || arrowMatch.index === undefined) continue;
+    let braceStart = m.index + m[0].length + arrowMatch.index + arrowMatch[0].length - 1;
+
+    // Extract test body using brace-depth counting
+    let depth = 1;
+    let i = braceStart + 1;
+    while (i < content.length && depth > 0) {
+      if (content[i] === "{") depth++;
+      else if (content[i] === "}") depth--;
+      i++;
+    }
+
+    if (depth !== 0) continue;
+
+    const testBody = content.slice(braceStart, i);
+
+    // Skip tests with data-driven loops wrapping assertions
+    if (/\bfor\s*\(/.test(testBody) || /\.forEach\s*\(/.test(testBody)) continue;
+
+    // Count expect() / expect.soft() / expect.poll() calls
+    const assertionMatches = testBody.match(/\bexpect\s*(?:\.(?:soft|poll)\s*)?\(/g);
+    const assertionCount = assertionMatches ? assertionMatches.length : 0;
+
+    if (assertionCount > 5) {
+      results.push({
+        file: filePath,
+        testName,
+        assertionCount,
+        line: testLine,
+      });
+    }
+  }
+
+  return results;
+}
+
+// ── Inline Test Data Detection ──────────────────────────────────────
+
+type InlineTestDataMatch = {
+  file: string;
+  line: number;
+  snippet: string;
+  type: string;
+};
+
+function findInlineTestDataInFile(filePath: string, content: string): InlineTestDataMatch[] {
+  const matches: InlineTestDataMatch[] = [];
+  const lines = content.split(/\r?\n/);
+
+  // Variable-name-anchored patterns
+  const patterns: Array<{ re: RegExp; type: string }> = [
+    { re: /\b(?:username|userName|user_name)\s*=\s*['"`]/i, type: "username" },
+    { re: /\b(?:firstName|first_name|lastname|last_name)\s*=\s*['"`]/i, type: "name" },
+    { re: /\b(?:address|street|streetAddress|street_address)\s*=\s*['"`]/i, type: "address" },
+    { re: /\b(?:zipCode|zip_code|postalCode|postal_code)\s*=\s*['"`]\d/i, type: "zipCode" },
+    { re: /\b(?:birthDate|birth_date|dob|dateOfBirth)\s*=\s*['"`]\d/i, type: "date" },
+    { re: /\b(?:cardNumber|card_number|creditCard|credit_card)\s*=\s*['"`]\d/i, type: "creditCard" },
+    { re: /\b(?:price|amount|cost)\s*=\s*['"`]\$?\d/i, type: "price" },
+    { re: /\b(?:phoneNumber|phone_number|phone)\s*=\s*['"`]\+?\d/i, type: "phone" },
+    { re: /\b(?:city|town)\s*=\s*['"`][A-Z]/i, type: "city" },
+  ];
+
+  // Skip patterns — environment variables, faker, fixtures, comments
+  const skipPatterns = /process\.env|Cypress\.env|os\.environ|\bfaker\b|\bfixture\b/i;
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i].trim();
+
+    // Skip comments
+    if (line.startsWith("//") || line.startsWith("#") || line.startsWith("*") || line.startsWith("/*")) continue;
+
+    // Skip lines with env/faker/fixture patterns
+    if (skipPatterns.test(line)) continue;
+
+    for (const { re, type } of patterns) {
+      if (re.test(line)) {
+        matches.push({
+          file: filePath,
+          line: i + 1,
+          snippet: line.slice(0, 120),
+          type,
+        });
+        break; // One match per line is enough
+      }
+    }
+  }
+
+  return matches;
+}
+
 export async function scanRepo(repoPath: string, options: ScanOptions = {}): Promise<ScanResults> {
   if (!existsSync(repoPath)) {
     console.warn(`[audit] Repo path does not exist: ${repoPath} — producing empty scan result.`);
@@ -1753,6 +1978,128 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // ============================================
+  // PW-STABILITY-005: Browser resource leak risk
+  // ============================================
+  const resourceLeakEvidence: ResourceLeakResult[] = [];
+
+  for (const testFile of filteredTestFiles) {
+    try {
+      const content = await fs.readFile(testFile, "utf8");
+      const leaks = findBrowserResourceLeaks(normalize(testFile), content);
+      resourceLeakEvidence.push(...leaks);
+    } catch {
+      continue;
+    }
+  }
+
+  if (resourceLeakEvidence.length > 0) {
+    findings.push({
+      findingId: "PW-STABILITY-005",
+      severity: "medium",
+      title: "Browser resource leak risk",
+      description:
+        `${resourceLeakEvidence.length} test file(s) manually create browser/context/page resources without proper cleanup in afterEach/afterAll hooks. This can leak browser processes, cause memory pressure, and leave zombie processes on CI runners.`,
+      recommendation:
+        "Either use Playwright's built-in fixtures (({ page }) => ...) which auto-cleanup, or add explicit browser.close()/context.close()/page.close() calls inside afterEach/afterAll hooks.",
+      evidence: resourceLeakEvidence.slice(0, 10).map((r) => ({
+        file: r.file,
+        line: r.line,
+        snippet: `Manual resource creation: ${r.creationPatterns.join(", ")} — no cleanup in afterEach/afterAll`,
+      })),
+    });
+  }
+
+  // ============================================
+  // SE-STABILITY-001: WebDriver resource leak risk
+  // ============================================
+  if (inventory.detectedFrameworks.includes("selenium")) {
+    const seleniumLeakEvidence: ResourceLeakResult[] = [];
+
+    const seleniumFileGlobs = ["**/*.py", "**/*.java", "**/*.ts", "**/*.js"];
+    const seleniumCandidateFiles = (await fg(seleniumFileGlobs, {
+      cwd: repoPath,
+      absolute: true,
+      dot: true,
+      onlyFiles: true,
+      followSymbolicLinks: false,
+    })) as string[];
+
+    const filteredSeleniumFiles = seleniumCandidateFiles.filter((f) => !isIgnored(f)).slice(0, 100);
+
+    for (const f of filteredSeleniumFiles) {
+      try {
+        const content = await fs.readFile(f, "utf8");
+        // Only check files with selenium imports
+        if (
+          /from\s+selenium\b/.test(content) ||
+          /import\s+org\.openqa\.selenium/.test(content) ||
+          /require\s*\(\s*['"]selenium-webdriver['"]/.test(content) ||
+          /from\s+['"]selenium-webdriver['"]/.test(content)
+        ) {
+          const leaks = findSeleniumResourceLeaks(normalize(f), content);
+          seleniumLeakEvidence.push(...leaks);
+        }
+      } catch {
+        continue;
+      }
+    }
+
+    if (seleniumLeakEvidence.length > 0) {
+      findings.push({
+        findingId: "SE-STABILITY-001",
+        severity: "medium",
+        title: "WebDriver resource leak risk",
+        description:
+          `${seleniumLeakEvidence.length} Selenium test file(s) create WebDriver instances without driver.quit() in a teardown hook. Unlike Playwright, Selenium has no auto-cleanup — missing quit() leaks browser processes.`,
+        recommendation:
+          "Add driver.quit() in a teardown hook (teardown_method for Python, @After/@AfterEach for Java/JS). This ensures cleanup even when tests fail.",
+        evidence: seleniumLeakEvidence.slice(0, 10).map((r) => ({
+          file: r.file,
+          line: r.line,
+          snippet: `WebDriver creation: ${r.creationPatterns.join(", ")} — no quit() in teardown`,
+        })),
+      });
+    }
+  }
+
+  // ============================================
+  // PW-STABILITY-006: Too many assertions per test
+  // ============================================
+  const allOverAsserted: OverAssertedTest[] = [];
+
+  for (const testFile of filteredTestFiles) {
+    try {
+      const content = await fs.readFile(testFile, "utf8");
+      const analysis = analyzeTestFile(content);
+      // Only scan files with ≥2 tests
+      if (analysis.testCount < 2) continue;
+      const overAsserted = findOverAssertedTests(normalize(testFile), content);
+      allOverAsserted.push(...overAsserted);
+    } catch {
+      continue;
+    }
+  }
+
+  // Only emit if ≥3 tests are over-asserted (don't flag a single outlier)
+  if (allOverAsserted.length >= 3) {
+    const sorted = allOverAsserted.sort((a, b) => b.assertionCount - a.assertionCount);
+    findings.push({
+      findingId: "PW-STABILITY-006",
+      severity: "low",
+      title: "Too many assertions per test",
+      description:
+        `${allOverAsserted.length} test(s) have more than 5 expect() assertions each. Tests that verify too many behaviors at once are harder to debug when they fail and indicate the test may be doing too much.`,
+      recommendation:
+        "Split over-asserted tests into focused tests that each verify one behavior. Use test.describe() to group related assertions. Consider page object methods that encapsulate multiple checks.",
+      evidence: sorted.slice(0, 10).map((t) => ({
+        file: t.file,
+        line: t.line,
+        snippet: `"${t.testName}" — ${t.assertionCount} assertions (threshold: 5)`,
+      })),
+    });
+  }
+
+  // ============================================
   // PW-LOC-002: CSS selector nesting depth > 3
   // ============================================
   const deepCssEvidence: Evidence[] = [];
@@ -2118,9 +2465,99 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     });
   }
 
+  // ============================================
+  // ARCH-010: Hardcoded inline test data
+  // ============================================
+  {
+    const inlineDataFiles: Array<{ file: string; matches: InlineTestDataMatch[] }> = [];
+
+    // Scope 1: Playwright test files (already have filteredTestFiles + filteredPomFiles)
+    for (const file of [...filteredTestFiles, ...filteredPomFiles].slice(0, 100)) {
+      // Skip files in fixtures/data/testdata directories (use repo-relative path to avoid
+      // false matches on parent directories like tests/fixtures/bad-repo)
+      const normalized = normalize(file);
+      const relPath = normalize(path.relative(repoPath, file));
+      if (/(?:^|[/\\])(?:fixtures|data|testdata)[/\\]/i.test(relPath)) continue;
+      try {
+        const content = await fs.readFile(file, "utf8");
+        const matches = findInlineTestDataInFile(normalized, content);
+        if (matches.length >= 3) {
+          inlineDataFiles.push({ file: normalized, matches });
+        }
+      } catch { continue; }
+    }
+
+    // Scope 2: Cypress test files (if detected)
+    if (inventory.detectedFrameworks.includes("cypress")) {
+      const cypressGlobs = ["**/cypress/e2e/**/*.{ts,js,tsx,jsx}", "**/*.cy.{ts,js,tsx,jsx}"];
+      const cypressFiles = (await fg(cypressGlobs, {
+        cwd: repoPath, absolute: true, dot: true, onlyFiles: true, followSymbolicLinks: false,
+      })) as string[];
+      const filteredCypressFiles = cypressFiles.filter((f) => !isIgnored(f));
+      for (const file of filteredCypressFiles.slice(0, 50)) {
+        const normalized = normalize(file);
+        const relPath = normalize(path.relative(repoPath, file));
+        if (/(?:^|[/\\])(?:fixtures|data|testdata)[/\\]/i.test(relPath)) continue;
+        // Avoid double-counting files already scanned
+        if (inlineDataFiles.some((d) => d.file === normalized)) continue;
+        try {
+          const content = await fs.readFile(file, "utf8");
+          const matches = findInlineTestDataInFile(normalized, content);
+          if (matches.length >= 3) {
+            inlineDataFiles.push({ file: normalized, matches });
+          }
+        } catch { continue; }
+      }
+    }
+
+    // Scope 3: Selenium test files (if detected)
+    if (inventory.detectedFrameworks.includes("selenium")) {
+      const seGlobs = ["**/*.py", "**/*.java"];
+      const seFiles = (await fg(seGlobs, {
+        cwd: repoPath, absolute: true, dot: true, onlyFiles: true, followSymbolicLinks: false,
+      })) as string[];
+      const filteredSeFiles = seFiles.filter((f) => !isIgnored(f));
+      for (const file of filteredSeFiles.slice(0, 50)) {
+        const normalized = normalize(file);
+        const relPath = normalize(path.relative(repoPath, file));
+        if (/(?:^|[/\\])(?:fixtures|data|testdata)[/\\]/i.test(relPath)) continue;
+        if (inlineDataFiles.some((d) => d.file === normalized)) continue;
+        try {
+          const content = await fs.readFile(file, "utf8");
+          // Only check selenium files
+          if (!/from\s+selenium\b|import\s+org\.openqa\.selenium|require\s*\(\s*['"]selenium-webdriver['"]/.test(content)) continue;
+          const matches = findInlineTestDataInFile(normalized, content);
+          if (matches.length >= 3) {
+            inlineDataFiles.push({ file: normalized, matches });
+          }
+        } catch { continue; }
+      }
+    }
+
+    // Require ≥2 files with matches before emitting
+    if (inlineDataFiles.length >= 2) {
+      const totalMatches = inlineDataFiles.reduce((sum, f) => sum + f.matches.length, 0);
+      const allMatches = inlineDataFiles.flatMap((f) => f.matches);
+      findings.push({
+        findingId: "ARCH-010",
+        severity: "low",
+        title: "Hardcoded inline test data",
+        description:
+          `${totalMatches} inline test data values found across ${inlineDataFiles.length} test file(s). Hardcoded usernames, addresses, dates, prices, and other test data makes tests brittle and harder to maintain. Extract to fixture files or use data factories.`,
+        recommendation:
+          "Move hardcoded test data to JSON fixture files, TypeScript data factories, or use a library like @faker-js/faker to generate test data. This makes data reusable, easier to update, and supports parameterized testing.",
+        evidence: allMatches.slice(0, 15).map((m) => ({
+          file: m.file,
+          line: m.line,
+          snippet: m.snippet,
+        })),
+      });
+    }
+  }
+
   // ARCH-006: Missing API mocking capability
   const mockingAnalysis = analyzeApiMocking([...filteredTestFiles, ...filteredPomFiles], pomContentsMap);
-  
+
   // Also check test files
   for (const testFile of filteredTestFiles.slice(0, 50)) {
     try {

@@ -10,9 +10,10 @@ import { getDb } from "@/lib/db";
  */
 export async function GET(
   _request: NextRequest,
-  { params }: { params: { id: string } },
+  { params }: { params: Promise<{ id: string }> },
 ) {
-  const scanId = parseInt(params.id, 10);
+  const { id } = await params;
+  const scanId = parseInt(id, 10);
   if (Number.isNaN(scanId) || scanId < 1) {
     return NextResponse.json(
       { error: "Invalid scan ID" },
