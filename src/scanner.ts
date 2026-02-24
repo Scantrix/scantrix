@@ -1447,7 +1447,16 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   const findings: Finding[] = [];
 
-  const pkgPath = files.find((f) => path.basename(f) === "package.json");
+  // ── Locate package.json ────────────────────────────────────────────
+  // Prefer root-level package.json (same directory as repoPath).
+  // fast-glob does not guarantee ordering, so files.find() may return
+  // a nested package.json first.  Explicitly check the root first.
+  const allPkgJsonPaths = files.filter((f) => path.basename(f) === "package.json");
+  const rootPkgPath = allPkgJsonPaths.find(
+    (f) => normalize(path.dirname(f)) === normalize(path.resolve(repoPath)),
+  );
+  let pkgPath = rootPkgPath || allPkgJsonPaths[0];
+
   let pkgJson: any | undefined;
   if (pkgPath) {
     try {
@@ -1459,6 +1468,46 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         null;
     } catch {
       inventory.playwrightVersion = null;
+    }
+  }
+
+  // If the root package.json didn't contain @playwright/test, look for it
+  // in the package.json co-located with the Playwright config, then in any
+  // other package.json across the repo.
+  if (!inventory.playwrightVersion && allPkgJsonPaths.length > 1) {
+    // 1. Check package.json next to the Playwright config
+    const configDir = allConfigFiles.length
+      ? normalize(path.dirname(allConfigFiles[0]))
+      : null;
+    const configPkgPath = configDir
+      ? allPkgJsonPaths.find(
+          (f) => normalize(path.dirname(f)) === configDir && f !== pkgPath,
+        )
+      : undefined;
+
+    // 2. Collect candidates: config-adjacent first, then everything else
+    const candidates = [
+      ...(configPkgPath ? [configPkgPath] : []),
+      ...allPkgJsonPaths.filter((f) => f !== pkgPath && f !== configPkgPath),
+    ];
+
+    for (const candidatePath of candidates) {
+      try {
+        const pkg = JSON.parse(await fs.readFile(candidatePath, "utf8"));
+        const ver =
+          pkg.devDependencies?.["@playwright/test"] ||
+          pkg.dependencies?.["@playwright/test"] ||
+          null;
+        if (ver) {
+          inventory.playwrightVersion = ver;
+          // Update pkgJson + pkgPath so downstream dep checks use the right package.json
+          pkgJson = pkg;
+          pkgPath = candidatePath;
+          break;
+        }
+      } catch {
+        continue;
+      }
     }
   }
 

@@ -232,6 +232,29 @@ describe("multi-config-repo", () => {
   });
 });
 
+// ─── Nested package.json: version extraction with multiple package.json files ──
+describe("nested-pkg-repo", () => {
+  let results: ScanResults;
+
+  beforeAll(async () => {
+    results = await scanRepo(path.join(FIXTURES, "nested-pkg-repo"), {
+      checkOutdatedDependencies: false,
+    });
+  }, 30_000);
+
+  it("extracts Playwright version from root package.json despite nested package.json files", () => {
+    expect(results.inventory.playwrightVersion).toBe("1.57.0");
+  });
+
+  it("detects Playwright framework", () => {
+    expect(results.inventory.detectedFrameworks).toContain("playwright");
+  });
+
+  it("detects Playwright config", () => {
+    expect(results.inventory.hasPlaywrightConfig).toBe(true);
+  });
+});
+
 // ─── .auditrc filtering ─────────────────────────────────────────────
 describe("auditrc filtering", () => {
   it("removes disabled rules from findings", async () => {
