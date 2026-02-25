@@ -1,6 +1,6 @@
 # Security Notes
 
-This document covers security considerations for the Repo Audit Agent and audited repositories.
+This document covers security considerations for the Scantrix tool and audited repositories.
 
 ## What the Audit Detects
 
@@ -40,7 +40,7 @@ Test files with hardcoded email addresses create collisions in shared test envir
 
 ## OWASP Relevance
 
-While this tool focuses on Playwright test quality, several findings overlap with OWASP concerns:
+While this tool focuses on automation framework quality, several findings overlap with OWASP concerns:
 
 | Finding | OWASP Category |
 |---------|---------------|
