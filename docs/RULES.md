@@ -1,6 +1,6 @@
 # Rules Reference
 
-Complete catalog of all audit rules implemented in Repo Audit Agent v4.2.0.
+Complete catalog of all audit rules implemented in Scantrix v5.2.0.
 
 ---
 
@@ -104,7 +104,7 @@ Using the `page` fixture in `beforeAll` shares browser state across tests and ca
 ### PW-STABILITY-004 — Tests without assertions
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **High** |
 | Category | Stability |
 | Analysis | Expect count < 50% of test count per file |
 
@@ -124,7 +124,7 @@ Manual browser/context/page creation without cleanup in afterEach/afterAll leaks
 |----------|-------|
 | Severity | **Low** |
 | Category | Stability |
-| Trigger | >5 expect() calls in a single test body |
+| Trigger | ≥3 files with >5 expect() calls in a single test body |
 
 Tests with excessive assertions verify too many behaviors at once, making failures harder to debug. Split into focused tests.
 
@@ -139,12 +139,12 @@ Tests with excessive assertions verify too many behaviors at once, making failur
 | Category | Locators |
 | Patterns | `locator('//...')`, `xpath=` |
 
-XPath selectors are brittle and less maintainable than role/label/testid locators. Prefer `getByRole`, `getByLabel`
+XPath selectors are brittle and less maintainable than role/label/testid locators. Prefer `getByRole`, `getByLabel`.
 
 ### PW-LOC-002 — Deep CSS nesting (>3 levels)
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | Locators |
 | Analysis | CSS combinator depth |
 
@@ -283,10 +283,10 @@ Deprecated packages can be unmaintained or vulnerable. Migrate to the recommende
 
 ## Architecture Rules (ARCH-*)
 
-### ARCH-001 — Missing BasePage pattern
+### ARCH-001 — No shared base pattern across Page Objects
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | Architecture |
 
 Multiple POMs without a shared base class or consistent fixtures.
@@ -294,7 +294,7 @@ Multiple POMs without a shared base class or consistent fixtures.
 ### ARCH-002 — Public locators in POMs
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | Architecture |
 
 POMs exposing locators as public properties instead of encapsulating them in methods.
@@ -326,7 +326,7 @@ Passwords, API keys, and tokens hardcoded in test files.
 ### ARCH-005a — Hardcoded email addresses
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | Architecture |
 
 Hardcoded email addresses in test files (risk of collisions in shared environments).
@@ -350,7 +350,7 @@ POM classes without custom error classes for better failure diagnostics.
 ### ARCH-008 — Large inline test data
 | Property | Value |
 |----------|-------|
-| Severity | **Low** |
+| Severity | **Medium** |
 | Category | Architecture |
 | Analysis | Large inline data blocks (>=50 lines) |
 
@@ -486,7 +486,7 @@ CI-specific settings may not activate in Azure Pipelines.
 ### CI-013 — Missing or excessive pipeline timeout
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | CI/CD |
 | Trigger | No timeout set or > 120 minutes |
 
@@ -495,7 +495,7 @@ No `timeoutInMinutes` set, or set above 120 minutes. Without a timeout, stuck te
 ### CI-014 — No reporter override in CI command
 | Property | Value |
 |----------|-------|
-| Severity | **Low** |
+| Severity | **Medium** |
 | Category | CI/CD |
 
 The CI playwright test command doesn't specify `--reporter`. CI may benefit from different reporters (e.g., JUnit for test results publishing).
@@ -608,18 +608,36 @@ Tests without assertions combined with retries create an illusion of quality —
 |----------|-------|
 | Severity | **High** |
 | Category | Insight |
-| Trigger | Playwright config lacks forbidOnly |
+| Trigger | ≥500 test files with workers ≤ 2 |
 
-test.only can silently leak to CI without this guard.
+A large test suite with very low parallelism wastes CI time and delays feedback. Increase workers or enable sharding.
 
-### PW-INSIGHT-015 — Retries not CI-conditional
+### PW-INSIGHT-013 — E2E-only test strategy detected
 | Property | Value |
 |----------|-------|
 | Severity | **Low** |
 | Category | Insight |
-| Trigger | retries fixed, not `process.env.CI` |
+| Trigger | >70% of tests use `page.goto()` (no component/API test layer) |
 
-Retries should be CI-only to surface local flakiness.
+Relying exclusively on E2E tests for all validation is slow, expensive, and fragile. Add component tests or API tests for faster feedback on business logic.
+
+### PW-INSIGHT-014 — Missing forbidOnly in Playwright config
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Insight |
+| Trigger | `forbidOnly` not set in Playwright config |
+
+Without `forbidOnly`, a `test.only()` can silently leak into CI and skip the rest of the suite. Enable `forbidOnly` in CI configurations.
+
+### PW-INSIGHT-015 — Retries not CI-conditional
+| Property | Value |
+|----------|-------|
+| Severity | **Medium** |
+| Category | Insight |
+| Trigger | retries enabled unconditionally (not gated on `process.env.CI`) |
+
+Retries should be CI-only to surface local flakiness. Use `retries: process.env.CI ? 2 : 0` pattern.
 
 ---
 
@@ -728,3 +746,104 @@ XPath selectors are verbose and fragile. Prefer CSS selectors, `By.id`, `By.name
 | Patterns | `webdriver.Chrome()`, `new ChromeDriver()` without `driver.quit()` in teardown |
 
 Selenium has no auto-cleanup. Missing `driver.quit()` in teardown leaks browser processes.
+
+---
+
+## System Rules (SCAN-*)
+
+### SCAN-MISSING-REPO — Repository path not found
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | System |
+| Trigger | Target repository path does not exist |
+
+Emitted when the target repository path passed to the scanner does not exist or is inaccessible.
+
+---
+
+## Rule Count Summary
+
+| Category | Count |
+|----------|-------|
+| Flakiness (PW-FLAKE) | 6 |
+| Stability (PW-STABILITY) | 7 |
+| Locators (PW-LOC) | 3 |
+| Performance (PW-PERF) | 3 |
+| Deprecated API (PW-DEPREC) | 8 |
+| Dependencies (DEP) | 2 |
+| Architecture (ARCH) | 11 |
+| CI/CD (CI) | 14 |
+| Insights (PW-INSIGHT) | 15 |
+| Cypress (CY) | 7 |
+| Selenium (SE) | 4 |
+| System (SCAN) | 1 |
+| **Total** | **81** |
+
+---
+
+## Health Scoring
+
+Findings are weighted by type and severity to produce risk points, which are then converted to a **0–100 health score** (higher = better) using exponential decay:
+
+```
+healthScore = round(100 × exp(-riskPoints / 80))
+```
+
+### Severity weights
+
+| Severity | Base points |
+|----------|-------------|
+| Low | 1 |
+| Medium | 2 |
+| High | 3 |
+
+### Category multipliers
+
+| Finding prefix | Multiplier | Rationale |
+|----------------|------------|-----------|
+| `PW-INSIGHT-*` | 1.5× | Correlated findings are higher signal |
+| `CI-*` | 1.3× | CI issues affect the entire pipeline |
+| `ARCH-*` | 1.2× | Architecture issues compound over time |
+| All others | 1.0× | — |
+
+### Evidence scaling
+
+Each finding's evidence count is factored in using a log₂ scale, capped at 3.5×:
+
+```
+evidenceMultiplier = min(1 + log₂(max(evidenceCount, 1)), 3.5)
+```
+
+### Grade thresholds
+
+| Grade | Health Score | Level | Description |
+|-------|-------------|-------|-------------|
+| A | ≥ 80 | Excellent | Framework follows best practices |
+| B | ≥ 50 | Good | Minor issues, normal maintenance needed |
+| C | ≥ 30 | Fair | Notable issues requiring attention |
+| D | ≥ 15 | Poor | Serious issues, prioritize remediation |
+| F | < 15 | Critical | Systemic issues across the framework |
+
+### Worked examples
+
+| Risk points | Health score | Grade |
+|-------------|-------------|-------|
+| 0 | 100 | A |
+| 20 | 78 | B |
+| 50 | 54 | B |
+| 85 | 35 | C |
+| 120 | 22 | D |
+| 164 | 13 | F |
+
+Grade thresholds are customizable via `.auditrc.json`:
+
+```json
+{
+  "thresholds": {
+    "gradeA": 80,
+    "gradeB": 50,
+    "gradeC": 30
+  }
+}
+```
