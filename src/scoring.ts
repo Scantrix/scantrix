@@ -12,11 +12,47 @@ function severityScore(sev: "low" | "medium" | "high"): number {
 }
 
 /**
+ * Convert raw risk points (unbounded, higher = worse) to a 0–100 health score
+ * (higher = better) using exponential decay.
+ *
+ * Examples:
+ *   0 risk points → 100 (perfect)
+ *   20 risk points → 78
+ *   50 risk points → 54
+ *   85 risk points → 35
+ *   120 risk points → 22
+ *   164 risk points → 13
+ */
+export function riskPointsToHealthScore(riskPoints: number): number {
+  return Math.round(100 * Math.exp(-riskPoints / 80));
+}
+
+/**
+ * Map a 0–100 health score to a letter grade and human-readable level.
+ * Higher score = better grade.
+ *
+ * Default thresholds: A (≥80), B (≥50), C (≥30), D (≥15), F (<15)
+ */
+export function gradeFromHealthScore(
+  score: number,
+  thresholds?: { gradeA: number; gradeB: number; gradeC: number },
+): { grade: string; level: string; description: string } {
+  const t = thresholds ?? { gradeA: 80, gradeB: 50, gradeC: 30 };
+  if (score >= t.gradeA) return { grade: "A", level: "Excellent", description: "Framework follows best practices" };
+  if (score >= t.gradeB) return { grade: "B", level: "Good", description: "Minor issues, normal maintenance needed" };
+  if (score >= t.gradeC) return { grade: "C", level: "Fair", description: "Notable issues requiring attention" };
+  if (score >= 15)       return { grade: "D", level: "Poor", description: "Serious issues, prioritize remediation" };
+  return                          { grade: "F", level: "Critical", description: "Systemic issues across the framework" };
+}
+
+/**
  * Calculate the risk score and grade from a set of findings.
  *
  * This is the **single source of truth** for scoring — used by the CLI report,
  * the push client, and (indirectly) the dashboard.  Any change to the formula
  * must happen here so all consumers stay in sync.
+ *
+ * Returns a 0–100 health score (higher = better) in the `riskScore` field.
  */
 export function calculateRiskScore(findings: Finding[]): RiskResult {
   let riskPoints = 0;
@@ -40,18 +76,8 @@ export function calculateRiskScore(findings: Finding[]): RiskResult {
     riskPoints += basePoints * evidenceMultiplier * multiplier;
   }
 
-  // Convert risk points to letter grade (A = best, F = worst)
-  // Thresholds calibrated for typical Playwright repos
-  // Thresholds raised in v2.5.0 to avoid grade inflation — most real repos should land B-C.
-  if (riskPoints <= 20) {
-    return { grade: "A", level: "🟢 Excellent", description: "Framework follows best practices", riskScore: Math.round(riskPoints) };
-  } else if (riskPoints <= 50) {
-    return { grade: "B", level: "🟡 Good", description: "Minor issues, normal maintenance needed", riskScore: Math.round(riskPoints) };
-  } else if (riskPoints <= 85) {
-    return { grade: "C", level: "🟠 Needs Improvement", description: "Notable issues requiring attention", riskScore: Math.round(riskPoints) };
-  } else if (riskPoints <= 120) {
-    return { grade: "D", level: "🔴 Critical", description: "Serious issues, prioritize remediation", riskScore: Math.round(riskPoints) };
-  } else {
-    return { grade: "F", level: "🔴 Severe", description: "Systemic issues across the framework", riskScore: Math.round(riskPoints) };
-  }
+  const healthScore = riskPointsToHealthScore(riskPoints);
+  const gradeInfo = gradeFromHealthScore(healthScore);
+
+  return { ...gradeInfo, riskScore: healthScore };
 }

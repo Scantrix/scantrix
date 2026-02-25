@@ -1,5 +1,25 @@
 # Changelog
 
+## [5.2.0] - 2026-02-24
+
+### Scoring Redesign — Health Score (0–100, higher = better)
+
+- **Breaking change**: The `riskScore` field now contains a 0–100 health score instead of
+  unbounded risk points. Higher values mean healthier repos. The field name is unchanged
+  to preserve the `ScanResult` contract.
+- New scoring formula: `healthScore = round(100 * exp(-riskPoints / 80))` — exponential
+  decay maps raw risk points to an intuitive bounded scale.
+- New grade thresholds: A (≥80), B (≥50), C (≥30), D (≥15), F (<15).
+- New exported helpers: `riskPointsToHealthScore()`, `gradeFromHealthScore()` in `scoring.ts`.
+- Default `.auditrc.json` thresholds updated: `{ gradeA: 80, gradeB: 50, gradeC: 30 }`.
+- Report hero card now shows `Grade A (92/100)` style with updated footnote.
+- Dashboard: all pages updated — trend direction flipped (score up = good), progress bars
+  use 0–100 range, labels renamed from "Risk Score" to "Health Score".
+- Database migration (`health_score_v1`): existing stored risk_score values automatically
+  converted to health scores on first dashboard startup.
+
+---
+
 ## [5.1.0] - 2026-02-24
 
 ### New Audit Rules — Resource Leaks, Over-Assertion, Inline Test Data

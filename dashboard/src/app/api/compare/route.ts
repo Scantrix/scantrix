@@ -44,9 +44,9 @@ export async function GET(_request: NextRequest) {
       trend_direction:
         r.prev_score === null
           ? "stable"
-          : (r.latest_score ?? 0) < (r.prev_score ?? 0)
+          : (r.latest_score ?? 0) > (r.prev_score ?? 0)
             ? "improving"
-            : (r.latest_score ?? 0) > (r.prev_score ?? 0)
+            : (r.latest_score ?? 0) < (r.prev_score ?? 0)
               ? "degrading"
               : "stable",
     }));

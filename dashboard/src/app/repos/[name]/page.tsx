@@ -713,20 +713,20 @@ export default function RepoDetailPage() {
         {/* Risk Grade */}
         <Card className="relative overflow-hidden">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Risk Grade</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Health Grade</CardTitle>
             <ShieldCheck className={`h-[30px] w-[30px] ${gradeColor[grade] ?? "text-muted-foreground"}`} />
           </CardHeader>
           <CardContent>
             <div className="flex items-baseline gap-2">
               <span className={`text-3xl font-bold ${gradeColor[grade] ?? ""}`}>{grade}</span>
-              <span className="text-sm text-muted-foreground">/ score {score.toFixed(1)}</span>
+              <span className="text-sm text-muted-foreground">/ {Math.round(score)}/100</span>
             </div>
             <div className="mt-2 h-1.5 w-full rounded-full bg-muted">
               <div
                 className={`h-full rounded-full transition-all ${
-                  score <= 20 ? "bg-emerald-500" : score <= 50 ? "bg-blue-500" : score <= 85 ? "bg-amber-500" : "bg-red-500"
+                  score >= 80 ? "bg-emerald-500" : score >= 50 ? "bg-blue-500" : score >= 30 ? "bg-amber-500" : "bg-red-500"
                 }`}
-                style={{ width: `${Math.min(100, (score / 150) * 100)}%` }}
+                style={{ width: `${Math.min(100, score)}%` }}
               />
             </div>
           </CardContent>

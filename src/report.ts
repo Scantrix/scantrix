@@ -866,9 +866,9 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
 }
 
 /** Delegate to the shared scoring module — single source of truth for grade thresholds. */
-function calculateRiskScore(findings: ScanResults["findings"]): { grade: string; level: string; description: string } {
-  const { grade, level, description } = sharedCalculateRiskScore(findings);
-  return { grade, level, description };
+function calculateRiskScore(findings: ScanResults["findings"]): { grade: string; level: string; description: string; riskScore: number } {
+  const { grade, level, description, riskScore } = sharedCalculateRiskScore(findings);
+  return { grade, level, description, riskScore };
 }
 
 function getTopActionItems(findings: ScanResults["findings"]): string[] {
@@ -1421,7 +1421,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`<div class="hero-grade">`);
   md.push(`<div class="grade-letter ${gradeClass}">${gradeLetter}</div>`);
   md.push(`<div class="grade-detail">`);
-  md.push(`<div class="grade-level">${risk.level}</div>`);
+  md.push(`<div class="grade-level">${risk.level} (${risk.riskScore}/100)</div>`);
   md.push(`<div class="grade-desc">${risk.description}</div>`);
   md.push(`</div>`);
   md.push(`</div>`);
@@ -1431,7 +1431,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`<div class="stat-card stat-card-medium"><div class="stat-label">Medium</div><div class="stat-value stat-medium">${mediumCount}</div></div>`);
   md.push(`<div class="stat-card stat-card-low"><div class="stat-label">Low</div><div class="stat-value stat-low">${lowCount}</div></div>`);
   md.push(`</div>`);
-  md.push(`<div class="hero-footnote">Score is a heuristic based on severity-weighted findings and hotspot concentration.</div>`);
+  md.push(`<div class="hero-footnote">Health score out of 100 — higher is better.</div>`);
   md.push(`</div>`);
   md.push(``);
 

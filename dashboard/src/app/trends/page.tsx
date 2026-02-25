@@ -78,10 +78,10 @@ const gradeBg: Record<string, string> = {
 };
 
 function riskGrade(score: number): string {
-  if (score <= 20) return "A";
-  if (score <= 50) return "B";
-  if (score <= 85) return "C";
-  if (score <= 120) return "D";
+  if (score >= 80) return "A";
+  if (score >= 50) return "B";
+  if (score >= 30) return "C";
+  if (score >= 15) return "D";
   return "F";
 }
 
@@ -459,7 +459,7 @@ export default function TrendsPage() {
                     {kpis.score}
                   </span>
                 </div>
-                <p className="mt-1 text-xs text-muted-foreground">latest risk score</p>
+                <p className="mt-1 text-xs text-muted-foreground">latest health score</p>
               </CardContent>
               <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r to-transparent ${
                 kpis.grade === "A" ? "from-emerald-500/40 via-emerald-500/15"
@@ -470,22 +470,22 @@ export default function TrendsPage() {
               }`} />
             </Card>
 
-            {/* Risk Δ */}
+            {/* Health Δ */}
             <Card className="relative overflow-hidden">
               <CardHeader className="flex flex-row items-center justify-between pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">Risk Score Δ</CardTitle>
-                {kpis.scoreDelta <= 0
-                  ? <TrendingDown className="h-[28px] w-[28px] text-emerald-400" />
-                  : <TrendingUp className="h-[28px] w-[28px] text-red-400" />
+                <CardTitle className="text-sm font-medium text-muted-foreground">Health Score Δ</CardTitle>
+                {kpis.scoreDelta >= 0
+                  ? <TrendingUp className="h-[28px] w-[28px] text-emerald-400" />
+                  : <TrendingDown className="h-[28px] w-[28px] text-red-400" />
                 }
               </CardHeader>
               <CardContent>
-                <div className={`text-3xl font-bold ${kpis.scoreDelta <= 0 ? "text-emerald-400" : "text-red-400"}`}>
+                <div className={`text-3xl font-bold ${kpis.scoreDelta >= 0 ? "text-emerald-400" : "text-red-400"}`}>
                   {kpis.scoreDelta > 0 ? "+" : ""}{kpis.scoreDelta}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">vs. previous scan</p>
               </CardContent>
-              <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${kpis.scoreDelta <= 0 ? "from-emerald-500/40 via-emerald-500/15" : "from-red-500/40 via-red-500/15"} to-transparent`} />
+              <div className={`absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r ${kpis.scoreDelta >= 0 ? "from-emerald-500/40 via-emerald-500/15" : "from-red-500/40 via-red-500/15"} to-transparent`} />
             </Card>
 
             {/* High Severity Δ */}
@@ -620,7 +620,7 @@ export default function TrendsPage() {
           {/* ══════════ Risk Score Area Chart ══════════ */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="text-lg">Risk Score Trajectory</CardTitle>
+              <CardTitle className="text-lg">Health Score Trajectory</CardTitle>
               {trendData.length >= 2 && (
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
@@ -633,6 +633,13 @@ export default function TrendsPage() {
                       <span className="text-xs text-muted-foreground">High:</span>
                       <DeltaChip value={kpis.highSinceFirst} invert />
                       <span className="text-xs text-muted-foreground">since first scan</span>
+                    </div>
+                  )}
+                  {kpis.scoreDelta !== 0 && (
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground">Score:</span>
+                      <DeltaChip value={kpis.scoreDelta} />
+                      <span className="text-xs text-muted-foreground">vs previous</span>
                     </div>
                   )}
                 </div>
@@ -655,7 +662,7 @@ export default function TrendsPage() {
                   <Area
                     type="monotone"
                     dataKey="risk_score"
-                    name="Risk Score"
+                    name="Health Score"
                     stroke="hsl(224 90% 63%)"
                     strokeWidth={2.5}
                     fill="url(#riskGrad)"
@@ -713,7 +720,7 @@ export default function TrendsPage() {
                     <TableHead className="text-right">High</TableHead>
                     <TableHead className="text-right">Medium</TableHead>
                     <TableHead className="text-right">Low</TableHead>
-                    <TableHead className="text-right">Risk Score</TableHead>
+                    <TableHead className="text-right">Health Score</TableHead>
                     <TableHead className="text-right">Δ</TableHead>
                     <TableHead className="text-center">Grade</TableHead>
                   </TableRow>
@@ -745,7 +752,7 @@ export default function TrendsPage() {
                         <Badge variant="low">{t.low_count}</Badge>
                       </TableCell>
                       <TableCell className="text-right font-mono">{t.risk_score}</TableCell>
-                      <TableCell className="text-right"><DeltaChip value={t.scoreDelta} invert /></TableCell>
+                      <TableCell className="text-right"><DeltaChip value={t.scoreDelta} /></TableCell>
                       <TableCell className="text-center">
                         <span className={`text-sm font-bold ${gradeColor[t.risk_grade ?? ""] ?? ""}`}>
                           {t.risk_grade ?? riskGrade(t.risk_score)}

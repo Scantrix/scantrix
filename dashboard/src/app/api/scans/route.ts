@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
     // payloads that don't include them.
     const score = body.riskScore ?? ((highCount ?? 0) * 10 + (mediumCount ?? 0) * 4 + (lowCount ?? 0));
     const grade = body.riskGrade ??
-      (score <= 20 ? "A" : score <= 50 ? "B" : score <= 85 ? "C" : score <= 120 ? "D" : "F");
+      (score >= 80 ? "A" : score >= 50 ? "B" : score >= 30 ? "C" : score >= 15 ? "D" : "F");
 
     // Serialize inventory/config data into summary_json if provided
     const summaryJson = body.inventory ? JSON.stringify(body.inventory) : null;
