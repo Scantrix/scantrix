@@ -8,7 +8,7 @@
 | PW-FLAKE-001 | Hard waits detected | 🔴 HIGH | `waitForTimeout`, `setTimeout` usage |
 | PW-FLAKE-002 | Force-click usage | 🟠 MEDIUM | `force: true` in clicks |
 | PW-FLAKE-003 | test.only / test.skip detected | 🔴 HIGH | Permanent `test.only()` or `test.skip()` definitions |
-| PW-FLAKE-004 | networkidle usage | � HIGH | `waitForLoadState('networkidle')` or `waitUntil: 'networkidle'` |
+| PW-FLAKE-004 | networkidle usage | 🔴 HIGH | `waitForLoadState('networkidle')` or `waitUntil: 'networkidle'` |
 | PW-FLAKE-005 | Non-retrying assertions | 🔴 HIGH | `expect(await locator.isVisible()).toBe(true)` instead of web-first assertions |
 | PW-FLAKE-006 | test.fixme() markers | 🟡 LOW | `test.fixme()` markers indicate deferred broken tests |
 
@@ -16,23 +16,24 @@
 | ID | Title | Severity | Description |
 |---|---|---|---|
 | PW-STABILITY-001 | Shared state risk | 🔴/🟠 HIGH/MED | 3+ tests without beforeEach/afterEach hooks |
-| PW-STABILITY-003 | Page fixture in beforeAll | 🔴 HIGH | `test.beforeAll(async ({ page }) => ...)` usage |
+| PW-STABILITY-001a | Test isolation could be improved | 🟡 LOW | beforeAll/afterAll only, no beforeEach/afterEach |
 | PW-STABILITY-002 | Poor test organization | 🟠 MEDIUM | 10+ tests without describe blocks |
-| PW-STABILITY-004 | Tests without assertions | 🟠 MEDIUM | expect() calls < 50% of test count |
+| PW-STABILITY-003 | Page fixture in beforeAll | 🔴 HIGH | `test.beforeAll(async ({ page }) => ...)` usage |
+| PW-STABILITY-004 | Tests without assertions | 🔴 HIGH | expect() calls < 50% of test count |
 | PW-STABILITY-005 | Browser resource leak risk | 🟠 MEDIUM | Manual browser/context/page creation without cleanup in afterEach/afterAll |
 | PW-STABILITY-006 | Too many assertions per test | 🟡 LOW | >5 expect() calls in a single test body (≥3 tests over threshold) |
 
 ### Locator Findings (PW-LOC-*)
 | ID | Title | Severity | Description |
 |---|---|---|---|
-| PW-LOC-001 | XPath selectors | � MEDIUM | `locator('//...')` usage — Playwright docs strongly discourage XPath |
-| PW-LOC-002 | Deep CSS nesting | 🟠 MEDIUM | CSS selectors with >3 nesting levels |
+| PW-LOC-001 | XPath selectors | 🟠 MEDIUM | `locator('//...')` usage — Playwright docs strongly discourage XPath |
+| PW-LOC-002 | Deep CSS nesting | 🟡 LOW | CSS selectors with >3 nesting levels |
 | PW-LOC-003 | nth/first/last selectors | 🟠 MEDIUM | `.nth()`, `.first()`, `.last()` usage |
 
 ### Performance Findings (PW-PERF-*)
 | ID | Title | Severity | Description |
 |---|---|---|---|
-| PW-PERF-001 | page.goto using networkidle | 🟡 MEDIUM | `page.goto()` with `waitUntil: 'networkidle'` is unreliable; default `'load'` is preferred |
+| PW-PERF-001 | page.goto using networkidle | 🟠 MEDIUM | `page.goto()` with `waitUntil: 'networkidle'` is unreliable; default `'load'` is preferred |
 | PW-PERF-002 | Hardcoded URLs | 🟠/🟡 MED/LOW | Full URLs instead of relative paths with baseURL |
 | PW-PERF-003 | networkidle + high timeout | 🟠 MEDIUM | networkidle combined with timeout > 60s |
 
@@ -43,7 +44,7 @@
 | PW-INSIGHT-002 | Excessive test timeout | 🟠 MEDIUM | timeout > 120000ms (2 minutes) |
 | PW-INSIGHT-003 | Missing timeout config | 🟡 LOW | No expect.timeout or actionTimeout |
 | PW-INSIGHT-004 | Excessive retries | 🟠 MEDIUM | retries > 2 |
-| PW-INSIGHT-005 | Missing trace config | � HIGH | trace = 'off' or not set — best-practices doc explicitly recommends trace |
+| PW-INSIGHT-005 | Missing trace config | 🔴 HIGH | trace = 'off' or not set — best-practices doc explicitly recommends trace |
 | PW-INSIGHT-006 | Missing video config | 🟡 LOW | video = 'off' or not set |
 | PW-INSIGHT-007 | High fixed workers | 🟡 LOW | workers hardcoded > 8 |
 | PW-INSIGHT-008 | Debugging black hole | 🔴/🟠 HIGH/MED | Retries enabled + 2+ debug mechanisms missing |
@@ -61,17 +62,16 @@
 | CI-002 | Missing HTML report | 🔴 HIGH | Playwright report not published |
 | CI-003 | Missing JUnit | 🟠 MEDIUM | JUnit results not published |
 | CI-004 | WORKERS not set | 🟠 MEDIUM | Config uses WORKERS but CI doesn't set it |
-| CI-005 | No dependency caching | 🟠 MEDIUM* | No npm/node_modules caching (MS-hosted). Note: do NOT cache browser binaries |
-| CI-005 | No dependency caching | 🟡 LOW* | No npm/node_modules caching (self-hosted). Note: do NOT cache browser binaries |
+| CI-005 | No dependency caching | 🟠/🟡 MED/LOW\* | No npm/node_modules caching (severity depends on agent pool type) |
 | CI-006 | Inconsistent WORKERS | 🔴/🟠/🟡 | WORKERS set in some but not all pipelines |
 | CI-007 | Missing sharding | 🔴/🟠 | Many test files (>100) without sharding |
 | CI-008 | Missing --with-deps | 🟠 MEDIUM | playwright install without --with-deps |
 | CI-009 | Missing failure artifacts | 🔴 HIGH | Retries enabled but artifacts not published |
 | CI-010 | Artifacts not on failure | 🟠 MEDIUM | Artifacts published but no always()/failed() condition |
-| CI-011 | Missing playwright install | 🔴 HIGH | No `npx playwright install` in CI pipeline |
+| CI-011 | Missing playwright install | 🟠 MEDIUM | No `npx playwright install` in CI pipeline |
 | CI-012 | CI env variable mismatch | 🟠 MEDIUM | Config uses `process.env.CI` but pipeline doesn't set CI=true |
-| CI-013 | Missing pipeline timeout | 🟠 MEDIUM | No timeoutInMinutes or > 120 minutes |
-| CI-014 | No reporter override in CI | � MEDIUM | `npx playwright test` without `--reporter` flag — docs recommend CI-conditional reporters |
+| CI-013 | Missing pipeline timeout | 🟡 LOW | No timeoutInMinutes or > 120 minutes |
+| CI-014 | No reporter override in CI | 🟠 MEDIUM | `npx playwright test` without `--reporter` flag — docs recommend CI-conditional reporters |
 
 \* Severity depends on agent pool type
 
@@ -86,7 +86,7 @@
 | ARCH-005a | Hardcoded emails | 🟡 LOW | Email addresses hardcoded in tests |
 | ARCH-006 | No API mocking | 🟡 LOW | No page.route() usage detected |
 | ARCH-007 | No custom error types | 🟡 LOW | Generic Error throws without custom classes |
-| ARCH-008 | Large inline test data | 🟡 LOW | Data blocks ≥50 lines inline in test files |
+| ARCH-008 | Large inline test data | 🟠 MEDIUM | Data blocks ≥50 lines inline in test files (≥2 files) |
 | ARCH-009 | Inline config overrides | 🟡 LOW | timeout/retries set inline in test() calls (≥3 occurrences) |
 | ARCH-010 | Hardcoded inline test data | 🟡 LOW | Variable-anchored inline data (usernames, addresses, dates, prices) in ≥2 files |
 
@@ -127,6 +127,11 @@
 | SE-LOC-001 | XPath selectors | 🟡 LOW | `By.xpath()`, `By.XPATH` usage |
 | SE-STABILITY-001 | WebDriver resource leak risk | 🟠 MEDIUM | WebDriver creation without `driver.quit()` in teardown hook |
 
+### Special Findings
+| ID | Title | Severity | Description |
+|---|---|---|---|
+| SCAN-MISSING-REPO | Repository path not found | 🔴 HIGH | Target repo path does not exist — no files scanned |
+
 ## Severity Prioritization Guide
 
 ### 🔴 Critical/High Priority
@@ -140,54 +145,67 @@
 6. **PW-INSIGHT-014** - Missing forbidOnly lets test.only() leak to CI silently
 7. **PW-STABILITY-001** (with retries) - Test isolation issues masked by retries
 8. **PW-STABILITY-003** - Shared browser state risk: `page` used in `beforeAll`
-9. **PW-INSIGHT-008** - Debugging black hole: retries without debug artifacts
-10. **ARCH-003** - Test coupling creates fragile, unpredictable tests
-11. **ARCH-005** - Hardcoded credentials are a security and maintainability risk
-12. **CI-002** - You can't debug failures without HTML reports
-13. **CI-009** - Retries enabled but no artifacts to debug failures
-14. **CI-007** (>500 files) - CI time is likely unbearable
-15. **DEP-002** - Deprecated npm packages may be unmaintained or vulnerable
+9. **PW-STABILITY-004** - Tests without assertions are "green noise" providing zero quality signal
+10. **PW-INSIGHT-008** - Debugging black hole: retries without debug artifacts
+11. **PW-INSIGHT-011** - "Green but useless" tests: no assertions + retries = false confidence
+12. **ARCH-003** - Test coupling creates fragile, unpredictable tests
+13. **ARCH-005** - Hardcoded credentials are a security and maintainability risk
+14. **CI-002** - You can't debug failures without HTML reports
+15. **CI-009** - Retries enabled but no artifacts to debug failures
+16. **CI-007** (>500 files) - CI time is likely unbearable
+17. **DEP-002** - Deprecated npm packages may be unmaintained or vulnerable
 
-### 🟠 Medium Priority  
+### 🟠 Medium Priority
 **Fix in next sprint - quality of life improvements**
 
 1. **PW-STABILITY-001** (no retries) - Isolation issues cause cascading failures
 2. **PW-STABILITY-002** - Large unorganized test files hard to maintain
-3. **PW-FLAKE-002** - Force clicks hide real issues
-4. **PW-LOC-001** - XPath is brittle and strongly discouraged by Playwright docs
-5. **PW-DEPREC-001** - Deprecated `$`/`$$` methods will be removed in future Playwright versions
-6. **PW-DEPREC-002** - Deprecated `page.action(selector)` methods — migrate to locator API
-7. **PW-DEPREC-003** - Deprecated wait methods — use modern `waitForURL`/`locator.waitFor()`
-8. **PW-DEPREC-004** - `test.describe.serial` creates isolated test dependencies
-9. **PW-DEPREC-007** - `page.type()` / `locator.type()` deprecated in v1.39
-10. **PW-DEPREC-008** - Layout selectors (`:left-of`, `:right-of`, etc.) deprecated
-11. **PW-INSIGHT-002** - Long timeouts hide performance problems
-12. **PW-INSIGHT-004** - Too many retries mask flakiness
-13. **PW-INSIGHT-015** - Retries should be CI-conditional (`process.env.CI ? 2 : 0`)
-14. **CI-014** - CI-conditional reporters recommended by best-practices doc
-15. **ARCH-004** - Untyped fixtures lose type safety benefits
-16. **CI-003** - Test result tracking improves DevOps visibility
-17. **CI-004** - Env vars should be explicit
-18. **CI-006** - Inconsistency causes confusion
-19. **CI-007** (>100 files) - Sharding will speed up CI
-20. **CI-008** - Missing deps cause hard-to-debug failures
-21. **DEP-001** - Outdated Playwright dependencies — stay current to reduce bugs
+3. **PW-STABILITY-005** - Browser resource leaks can exhaust system resources
+4. **PW-FLAKE-002** - Force clicks hide real issues
+5. **PW-LOC-001** - XPath is brittle and strongly discouraged by Playwright docs
+6. **PW-DEPREC-001** - Deprecated `$`/`$$` methods will be removed in future Playwright versions
+7. **PW-DEPREC-002** - Deprecated `page.action(selector)` methods — migrate to locator API
+8. **PW-DEPREC-003** - Deprecated wait methods — use modern `waitForURL`/`locator.waitFor()`
+9. **PW-DEPREC-004** - `test.describe.serial` creates isolated test dependencies
+10. **PW-DEPREC-007** - `page.type()` / `locator.type()` deprecated in v1.39
+11. **PW-DEPREC-008** - Layout selectors (`:left-of`, `:right-of`, etc.) deprecated
+12. **PW-INSIGHT-002** - Long timeouts hide performance problems
+13. **PW-INSIGHT-004** - Too many retries mask flakiness
+14. **PW-INSIGHT-015** - Retries should be CI-conditional (`process.env.CI ? 2 : 0`)
+15. **CI-014** - CI-conditional reporters recommended by best-practices doc
+16. **ARCH-004** - Untyped fixtures lose type safety benefits
+17. **ARCH-008** - Large inline test data blocks bloat files and reduce readability
+18. **CI-003** - Test result tracking improves DevOps visibility
+19. **CI-004** - Env vars should be explicit
+20. **CI-006** - Inconsistency causes confusion
+21. **CI-007** (>100 files) - Sharding will speed up CI
+22. **CI-008** - Missing deps cause hard-to-debug failures
+23. **CI-011** - Missing playwright install causes browser-not-found failures
+24. **CI-012** - CI env var mismatch causes config divergence
+25. **DEP-001** - Outdated Playwright dependencies — stay current to reduce bugs
 
 ### 🟡 Low Priority
 **Fix when refactoring - nice to have**
 
 1. **PW-FLAKE-006** - test.fixme() markers indicate deferred broken tests
-2. **PW-DEPREC-005** - Deprecated `snapshotDir` — use `snapshotPathTemplate`
-3. **PW-DEPREC-006** - Deprecated BrowserContext methods
-4. **PW-INSIGHT-003** - Explicit timeouts improve clarity
-5. **PW-INSIGHT-006** - Videos helpful but traces more important
-6. **PW-INSIGHT-007** - Fixed workers reduce flexibility
-7. **ARCH-001** - No shared base pattern — consider fixtures over inheritance
-8. **ARCH-002** - Public locators OK per docs; encapsulate complex interactions
-9. **ARCH-005a** - Hardcoded emails cause parallel test conflicts
-10. **ARCH-006** - API mocking enables faster, more isolated tests
-11. **ARCH-007** - Custom error types improve debugging
-12. **CI-005** (self-hosted) - Caching less critical if deps cached
+2. **PW-STABILITY-001a** - Test isolation improvements (beforeAll/afterAll only)
+3. **PW-STABILITY-006** - Over-asserted tests are harder to debug
+4. **PW-LOC-002** - Deeply nested CSS selectors are fragile to DOM changes
+5. **PW-DEPREC-005** - Deprecated `snapshotDir` — use `snapshotPathTemplate`
+6. **PW-DEPREC-006** - Deprecated BrowserContext methods
+7. **PW-INSIGHT-003** - Explicit timeouts improve clarity
+8. **PW-INSIGHT-006** - Videos helpful but traces more important
+9. **PW-INSIGHT-007** - Fixed workers reduce flexibility
+10. **PW-INSIGHT-013** - E2E-only test strategy (missing test pyramid)
+11. **ARCH-001** - No shared base pattern — consider fixtures over inheritance
+12. **ARCH-002** - Public locators OK per docs; encapsulate complex interactions
+13. **ARCH-005a** - Hardcoded emails cause parallel test conflicts
+14. **ARCH-006** - API mocking enables faster, more isolated tests
+15. **ARCH-007** - Custom error types improve debugging
+16. **ARCH-009** - Inline config overrides should use test.use()
+17. **ARCH-010** - Hardcoded inline test data reduces maintainability
+18. **CI-005** (self-hosted) - Caching less critical if deps cached
+19. **CI-013** - Pipeline timeout guards prevent stuck runs
 
 ## Common Remediation Patterns
 
@@ -300,10 +318,10 @@ export default defineConfig({
  **After:**
 ```typescript
 export default defineConfig({
-  workers: process.env.WORKERS 
-    ? parseInt(process.env.WORKERS) 
-    : process.env.CI 
-      ? 4 
+  workers: process.env.WORKERS
+    ? parseInt(process.env.WORKERS)
+    : process.env.CI
+      ? 4
       : 2,
 });
 ```
@@ -445,10 +463,10 @@ export default defineConfig({
   use: {
     // Capture trace only when needed
     trace: 'on-first-retry', // or 'retain-on-failure'
-    
+
     // Capture video on retry
     video: 'on-first-retry',
-    
+
     // Ensure screenshots are taken
     screenshot: 'only-on-failure',
   },
@@ -628,7 +646,7 @@ test.describe('Checkout Flow', () => {
 **Benefits:**
 - Clear test structure in reports
 - Easy to run subsets: `npx playwright test --grep "Payment Validation"`
-- Better failure context: "Checkout Flow › Payment Validation › should reject expired card"
+- Better failure context: "Checkout Flow > Payment Validation > should reject expired card"
 - Shared setup per group with nested beforeEach hooks
 - Easier code review and maintenance
 
@@ -669,7 +687,7 @@ test('should show dashboard', async ({ loginPage, dashboardPage }) => {
 // pages/BasePage.ts
 export abstract class BasePage {
   constructor(protected page: Page) {}
-  
+
   async waitForLoad() {
     await this.page.waitForLoadState('domcontentloaded');
   }
@@ -696,7 +714,7 @@ export class ProductPage {
   readonly addToCartButton = this.page.locator('[data-testid="add-to-cart"]');
   readonly quantity = this.page.locator('#quantity');
   readonly price = this.page.locator('.price');
-  
+
   constructor(private page: Page) {}
 }
 ```
@@ -707,9 +725,9 @@ export class ProductPage {
   readonly price = this.page.locator('.price');  // simple: keep public
   private addToCartButton = this.page.locator('[data-testid="add-to-cart"]');
   private quantityInput = this.page.locator('#quantity');
-  
+
   constructor(private page: Page) {}
-  
+
   // Complex multi-step: encapsulate
   async addToCart(quantity: number = 1) {
     await this.quantityInput.fill(String(quantity));
@@ -769,7 +787,7 @@ export const test = base.extend({
     const client = createApiClient();
     await use(client);  // No type safety!
   },
-  
+
   testUser: async ({}, use: any) => {
     await use({ name: 'test', email: 'test@example.com' });
   }
@@ -789,7 +807,7 @@ export const test = base.extend<TestFixtures>({
     const client = createApiClient();
     await use(client);  // TypeScript knows the type!
   },
-  
+
   testUser: async ({}, use) => {
     await use({ name: 'test', email: 'test@example.com' });
   }
@@ -861,7 +879,7 @@ test('shows error on API failure', async ({ page }) => {
       body: JSON.stringify({ error: 'Internal Server Error' })
     });
   });
-  
+
   await page.goto('/dashboard');
   await expect(page.locator('.error-message')).toContainText('Something went wrong');
 });
@@ -871,13 +889,13 @@ test('handles slow responses gracefully', async ({ page }) => {
     await new Promise(r => setTimeout(r, 5000));  // Simulate slow response
     route.fulfill({ body: JSON.stringify({ data: [] }) });
   });
-  
+
   await page.goto('/dashboard');
   await expect(page.locator('.loading-spinner')).toBeVisible();
 });
 ```
 
-### Pattern 20: Migrate Deprecated APIs (PW-DEPREC-001 to 006)
+### Pattern 20: Migrate Deprecated APIs (PW-DEPREC-001 to 008)
 
  **Before (deprecated selector engine):**
 ```typescript
@@ -1037,48 +1055,111 @@ export default defineConfig({
 });
 ```
 
+### Pattern 24: Clean Up Browser Resources (PW-STABILITY-005, SE-STABILITY-001)
+
+ **Before (Playwright — resource leak):**
+```typescript
+test('custom browser context', async () => {
+  const browser = await chromium.launch();
+  const context = await browser.newContext();
+  const page = await context.newPage();
+  await page.goto('/app');
+  // browser never closed — leaks!
+});
+```
+
+ **After (Playwright — proper cleanup):**
+```typescript
+test.describe('Custom browser tests', () => {
+  let browser: Browser;
+
+  test.beforeAll(async () => {
+    browser = await chromium.launch();
+  });
+
+  test.afterAll(async () => {
+    await browser.close(); // Always clean up
+  });
+
+  test('custom browser context', async () => {
+    const context = await browser.newContext();
+    const page = await context.newPage();
+    await page.goto('/app');
+    await context.close(); // Clean up context too
+  });
+});
+```
+
+ **Better: Use Playwright's built-in fixtures instead of manual browser management.**
+
 ## Typical Audit Workflow
 
-1. **Run audit** → Generate audit_summary.md
-2. **Read Executive Summary** → Understand risk level
-3. **Follow Top 3 Actions** → Start with highest impact
-4. **Address High Findings** → Fix flakiness issues first
-5. **Migrate Deprecated APIs** → Update to modern Playwright APIs (PW-DEPREC-*)
-6. **Configure CI** → Ensure reports/artifacts are published
-7. **Address Medium Findings** → Quality of life improvements
-7. **Re-run audit** → Validate improvements
-8. **Track over time** → Risk score should decrease
+1. **Run audit** — Generate audit_summary.md
+2. **Read Executive Summary** — Understand health score and grade
+3. **Follow Top 3 Actions** — Start with highest impact
+4. **Address High Findings** — Fix flakiness issues first
+5. **Migrate Deprecated APIs** — Update to modern Playwright APIs (PW-DEPREC-\*)
+6. **Configure CI** — Ensure reports/artifacts are published
+7. **Address Medium Findings** — Quality of life improvements
+8. **Re-run audit** — Validate improvements
+9. **Track over time** — Health score should increase toward 100
 
-## Risk Score Interpretation
+## Health Score Interpretation
 
-| Score Range | Grade | Level | Action |
-|------|---|----------|----------------|
-| 0–20 | A | 🟢 Excellent | Maintain current quality |
-| 21–50 | B | 🟡 Good | Schedule minor improvements |
-| 51–85 | C | 🟠 Needs Improvement | Prioritize remediation |
-| 86–120 | D | 🔴 Critical | Serious issues, prioritize immediately |
-| 121+ | F | 🔴 Severe | Systemic issues across the framework |
+Scantrix uses a **0–100 health score** where **higher is better**, similar to Google Lighthouse. The score is computed from raw risk points using exponential decay: `healthScore = round(100 × exp(-riskPoints / 80))`.
 
-**Score Calculation:**
+| Health Score | Grade | Level | Action |
+|---|---|---|---|
+| 80–100 | A | Excellent | Maintain current quality |
+| 50–79 | B | Good | Schedule minor improvements |
+| 30–49 | C | Fair | Prioritize remediation |
+| 15–29 | D | Poor | Serious issues, prioritize immediately |
+| 0–14 | F | Critical | Systemic issues across the framework |
+
+### Score Calculation
+
 ```
-score = Σ (basePoints × evidenceMultiplier × categoryMultiplier)
+Step 1: Accumulate risk points
 
-basePoints (severity):
-  high = 3, medium = 2, low = 1
+  riskPoints = Σ (basePoints × evidenceMultiplier × categoryMultiplier)
 
-evidenceMultiplier:
-  min(1 + log₂(evidenceCount), 3.5)   // log-scale, capped at 3.5×
+  basePoints (severity):
+    high = 3, medium = 2, low = 1
 
-categoryMultiplier:
-  PW-INSIGHT-* = 1.5×   (correlated findings)
-  CI-*         = 1.3×   (CI pipeline impact)
-  ARCH-*       = 1.2×   (architecture debt)
-  all others   = 1.0×
+  evidenceMultiplier:
+    min(1 + log₂(evidenceCount), 3.5)   // log-scale, capped at 3.5×
+
+  categoryMultiplier:
+    PW-INSIGHT-* = 1.5×   (correlated findings)
+    CI-*         = 1.3×   (CI pipeline impact)
+    ARCH-*       = 1.2×   (architecture debt)
+    all others   = 1.0×
+
+Step 2: Convert to health score
+
+  healthScore = round(100 × exp(-riskPoints / 80))
 ```
-```
 
-Example:
-- 25 hard waits (high): 3 × 10 = 30
-- 3 force clicks (medium): 2 × 3 = 6
-- 1 masked flakiness (high): 3 × 1 = 3
-- **Total: 39 (🟡 Medium)**
+### Example Conversions
+
+| Risk Points | Health Score | Grade |
+|---|---|---|
+| 0 | 100 | A |
+| 10 | 88 | A |
+| 20 | 78 | B |
+| 50 | 54 | B |
+| 85 | 35 | C |
+| 120 | 22 | D |
+| 164 | 13 | F |
+
+### Worked Example
+
+```
+Findings:
+  - 25 hard waits (PW-FLAKE-001, high):  3 × min(1 + log₂(25), 3.5) × 1.0 = 3 × 3.5 × 1.0 = 10.5
+  - 3 force clicks (PW-FLAKE-002, med):   2 × min(1 + log₂(3), 3.5) × 1.0  = 2 × 2.58 × 1.0 = 5.2
+  - 1 masked flakiness (PW-INSIGHT-001):  3 × 1.0 × 1.5                     = 4.5
+
+  riskPoints ≈ 20.2
+  healthScore = round(100 × exp(-20.2 / 80)) = round(100 × 0.777) = 78 (Grade B)
+```
