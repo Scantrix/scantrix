@@ -28,14 +28,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { repoName, findings, timestamp, findingsCount, highCount, mediumCount, lowCount } = body;
+  const { repoName: rawRepoName, findings, timestamp, findingsCount, highCount, mediumCount, lowCount } = body;
 
-  if (!repoName || !Array.isArray(findings)) {
+  if (!rawRepoName || !Array.isArray(findings)) {
     return NextResponse.json(
       { error: "Missing required fields: repoName, findings" },
       { status: 400 },
     );
   }
+
+  // Normalize repo name to lowercase to prevent case-sensitive duplicates
+  const repoName = rawRepoName.trim().toLowerCase();
 
   try {
     const db = getDb();
@@ -52,7 +55,7 @@ export async function POST(request: NextRequest) {
     // payloads that don't include them.
     const score = body.riskScore ?? ((highCount ?? 0) * 10 + (mediumCount ?? 0) * 4 + (lowCount ?? 0));
     const grade = body.riskGrade ??
-      (score <= 20 ? "A" : score <= 50 ? "B" : score <= 85 ? "C" : score <= 120 ? "D" : "F");
+      (score >= 80 ? "A" : score >= 60 ? "B" : score >= 40 ? "C" : score >= 25 ? "D" : "F");
 
     // Serialize inventory/config data into summary_json if provided
     const summaryJson = body.inventory ? JSON.stringify(body.inventory) : null;

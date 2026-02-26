@@ -130,9 +130,10 @@ runs:
           const low = findings.filter(f => f.severity === 'low').length;
           const total = findings.length;
 
-          // Grade calculation (mirrors report.ts logic)
-          const score = high * 10 + medium * 4 + low * 1;
-          const grade = score <= 20 ? 'A' : score <= 50 ? 'B' : score <= 85 ? 'C' : score <= 120 ? 'D' : 'F';
+          // Grade calculation (mirrors scoring.ts health score logic)
+          const riskPoints = high * 10 + medium * 4 + low * 1;
+          const score = Math.round(100 * Math.exp(-riskPoints / 80));
+          const grade = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : score >= 25 ? 'D' : 'F';
           const gradeEmoji = { A: '🟢', B: '🔵', C: '🟡', D: '🟠', F: '🔴' }[grade] || '⚪';
 
           let body = `## ${gradeEmoji} Scantrix Audit Report\n\n`;

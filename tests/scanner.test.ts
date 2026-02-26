@@ -115,6 +115,14 @@ describe("bad-repo", () => {
     expect(hasFinding(results, "CI-011")).toBe(true);
   });
 
+  // ── Architecture ─────────────────────────────────────────────
+  it("detects emoji characters in log messages (ARCH-011)", () => {
+    expect(hasFinding(results, "ARCH-011")).toBe(true);
+    const f = getFinding(results, "ARCH-011")!;
+    expect(f.severity).toBe("low");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(3);
+  });
+
   // ── Insights ───────────────────────────────────────────────────
   it("produces insight for hardcoded URLs + no baseURL (PW-INSIGHT-010)", () => {
     expect(hasFinding(results, "PW-INSIGHT-010")).toBe(true);
@@ -126,9 +134,29 @@ describe("bad-repo", () => {
     expect(f?.severity).toBe("high");
   });
 
+  // ── False-positive suppression ────────────────────────────────
+  it("does NOT flag utility files in fixtures/ for PW-FLAKE-001", () => {
+    const f = getFinding(results, "PW-FLAKE-001")!;
+    const evidenceFiles = f.evidence.map((e) => e.file);
+    expect(evidenceFiles.some((p) => p.includes("resource-manager"))).toBe(false);
+  });
+
+  it("does NOT flag utility files in fixtures/ for PW-FLAKE-002", () => {
+    const f = getFinding(results, "PW-FLAKE-002");
+    if (f) {
+      const evidenceFiles = f.evidence.map((e) => e.file);
+      expect(evidenceFiles.some((p) => p.includes("resource-manager"))).toBe(false);
+    }
+  });
+
   // ── Inventory ──────────────────────────────────────────────────
   it("counts test files correctly", () => {
-    expect(results.inventory.testFiles).toBe(5);
+    expect(results.inventory.testFiles).toBe(6);
+  });
+
+  it("counts individual test cases across files", () => {
+    expect(results.inventory.testCases).toBeDefined();
+    expect(results.inventory.testCases).toBe(23);
   });
 
   it("detects Playwright config", () => {
@@ -169,7 +197,7 @@ describe("good-repo", () => {
     expect(hasFinding(results, "PW-INSIGHT-010")).toBe(false);
   });
 
-  it("does NOT flag resource leaks (uses fixtures)", () => {
+  it("does NOT flag resource leaks (uses fixtures or variable-based cleanup)", () => {
     expect(hasFinding(results, "PW-STABILITY-005")).toBe(false);
   });
 
@@ -188,6 +216,11 @@ describe("good-repo", () => {
   it("detects properly configured CI", () => {
     // Good repo has Cache@2, playwright install, report publishing
     expect(hasFinding(results, "CI-011")).toBe(false);
+  });
+
+  it("counts individual test cases across files", () => {
+    expect(results.inventory.testCases).toBeDefined();
+    expect(results.inventory.testCases).toBe(4);
   });
 });
 

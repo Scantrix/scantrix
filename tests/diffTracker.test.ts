@@ -9,7 +9,7 @@ describe("computeDiff", () => {
 
   const current = [
     { findingId: "PW-FLAKE-001", severity: "high", title: "Hard waits", description: "", recommendation: "", evidence: [] },
-    { findingId: "PW-FLAKE-002", severity: "medium", title: "Force clicks", description: "", recommendation: "", evidence: [] },
+    { findingId: "PW-FLAKE-002", severity: "low", title: "Force clicks", description: "", recommendation: "", evidence: [] },
   ];
 
   it("identifies new findings", () => {

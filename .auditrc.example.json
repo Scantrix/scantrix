@@ -1,5 +1,5 @@
 {
-  "$comment": "Repo Audit Agent configuration. Place as .auditrc.json in your repository root.",
+  "$comment": "Scantrix configuration. Place as .auditrc.json in your repository root.",
   "rules": {
     "disabled": [],
     "severityOverrides": {}
@@ -9,8 +9,8 @@
     "**/generated/**"
   ],
   "thresholds": {
-    "gradeA": 20,
-    "gradeB": 50,
-    "gradeC": 85
+    "gradeA": 80,
+    "gradeB": 60,
+    "gradeC": 40
   }
 }

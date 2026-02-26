@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import type { Finding, Inventory, ScanResults } from "./scanner";
 import { calculateRiskScore } from "./scoring";
+import type { DensityInfo } from "./scoring";
 
 /**
  * Canonical scan-result contract.
@@ -44,6 +45,8 @@ export interface ScanResult {
     low: number;
     riskScore: number;
     riskGrade: string;
+    /** Present when density normalization was applied. */
+    densityAdjustment?: DensityInfo;
   };
 
   /** Repository inventory snapshot */
@@ -60,9 +63,14 @@ export function buildScanResult(
   raw: ScanResults,
   opts: { version: string; startedAt: string; repoPath?: string },
 ): ScanResult {
-  const risk = calculateRiskScore(raw.findings);
+  const risk = calculateRiskScore(raw.findings, {
+    testFiles: raw.inventory.testFiles,
+    cypressTestFiles: raw.inventory.cypressTestFiles,
+    seleniumTestFiles: raw.inventory.seleniumTestFiles,
+  });
   const effectivePath = opts.repoPath ?? raw.repoPath;
-  const repoName = effectivePath.split(/[/\\]/).pop() || "unknown";
+  // Normalize repo name to lowercase to prevent case-sensitive duplicates in sinks/dashboard
+  const repoName = (effectivePath.split(/[/\\]/).pop() || "unknown").toLowerCase();
 
   return {
     tool: "scantrix",
@@ -84,6 +92,7 @@ export function buildScanResult(
       low: raw.findings.filter(f => f.severity === "low").length,
       riskScore: risk.riskScore,
       riskGrade: risk.grade,
+      densityAdjustment: risk.densityInfo,
     },
     inventory: raw.inventory,
   };

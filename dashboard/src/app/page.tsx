@@ -97,7 +97,7 @@ export default function DashboardPage() {
     ? repos.reduce((s, r) => s + (r.risk_score ?? 0), 0) / totalRepos
     : 0;
   const avgScoreDisplay = totalRepos > 0 ? avgScore.toFixed(1) : "—";
-  const avgGrade = avgScore <= 20 ? "A" : avgScore <= 50 ? "B" : avgScore <= 85 ? "C" : avgScore <= 120 ? "D" : "F";
+  const avgGrade = avgScore >= 80 ? "A" : avgScore >= 50 ? "B" : avgScore >= 30 ? "C" : avgScore >= 15 ? "D" : "F";
   const lastScanDate = repos.reduce<string | undefined>((latest, r) => {
     if (!r.last_scanned_at) return latest;
     if (!latest) return r.last_scanned_at;
@@ -129,10 +129,10 @@ export default function DashboardPage() {
   if (trendScores.length > 1) {
     const n = trendScores.length;
     for (let i = 0; i < n - 1; i++) {
-      const segColor = trendScores[i + 1] < trendScores[i]
-        ? TREND_GREEN                       // score went down → improving
-        : trendScores[i + 1] > trendScores[i]
-          ? TREND_RED                       // score went up → declining
+      const segColor = trendScores[i + 1] > trendScores[i]
+        ? TREND_GREEN                       // score went up → improving
+        : trendScores[i + 1] < trendScores[i]
+          ? TREND_RED                       // score went down → declining
           : TREND_BLUE;                     // flat
       const startPct = `${((i / (n - 1)) * 100).toFixed(1)}%`;
       const endPct   = `${(((i + 1) / (n - 1)) * 100).toFixed(1)}%`;
@@ -146,9 +146,9 @@ export default function DashboardPage() {
 
   // Latest-segment direction for the indicator badge
   const latestSegmentDir = trendScores.length > 1
-    ? trendScores[trendScores.length - 1] < trendScores[trendScores.length - 2]
+    ? trendScores[trendScores.length - 1] > trendScores[trendScores.length - 2]
       ? "improving"
-      : trendScores[trendScores.length - 1] > trendScores[trendScores.length - 2]
+      : trendScores[trendScores.length - 1] < trendScores[trendScores.length - 2]
         ? "declining"
         : "flat"
     : "flat";
@@ -252,15 +252,15 @@ export default function DashboardPage() {
           <div className="flex items-center gap-3">
             <LineChart className="relative -top-0.5 h-[30px] w-[30px] text-primary" />
             <div>
-              <CardTitle className="text-lg title-font">Risk Trend</CardTitle>
-              <p className="text-xs text-muted-foreground">Average risk score by scan date</p>
+              <CardTitle className="text-lg title-font">Health Trend</CardTitle>
+              <p className="text-xs text-muted-foreground">Average health score by scan date</p>
             </div>
           </div>
           <div className="inline-flex items-center gap-2 rounded-full border border-border/60 bg-muted/40 px-3.5 py-1.5 text-sm text-muted-foreground">
             {latestSegmentDir === "improving" ? (
-              <TrendingDown className="h-[30px] w-[30px] text-emerald-400" />
+              <TrendingUp className="h-[30px] w-[30px] text-emerald-400" />
             ) : latestSegmentDir === "declining" ? (
-              <TrendingUp className="h-[30px] w-[30px] text-red-400" />
+              <TrendingDown className="h-[30px] w-[30px] text-red-400" />
             ) : (
               <Activity className="h-[30px] w-[30px] text-blue-400" />
             )}

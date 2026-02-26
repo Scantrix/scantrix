@@ -1,5 +1,74 @@
 # Changelog
 
+## [5.2.2] - 2026-02-26
+
+### Density-Normalized Health Scoring
+
+- Health score now factors in test suite size via **density normalization**. The decay constant
+  (λ) is scaled by suite size: `λ = 80 × clamp(1.0 + 0.5 × log₂(testFiles / 50), 1.0, 3.5)`.
+  Larger suites get a more forgiving decay, so the same risk points yield a higher health score.
+- Suites with ≤ 50 test files see no change (neutral point). 100 files → 1.5× λ, 200 → 2.0×,
+  1,000 → 2.66×, 3,200+ → capped at 3.5×.
+- When no inventory data is available, scoring behavior is identical to the previous version.
+- Report hero card now shows density adjustment details in the footnote.
+- `ScanResult.summary` includes optional `densityAdjustment` metadata.
+- New test file: `tests/scoring.test.ts` with 19 unit tests covering all density scenarios.
+
+### Even Grade Thresholds
+
+- Grade bands rebalanced to more even 20-point intervals: A (≥80), B (≥60), C (≥40), D (≥25), F (<25).
+- Previous bands were uneven: B spanned 30 points (50–79), C only 20 (30–49), D only 15 (15–29).
+- Fixed stale `.auditrc.example.json`, `CLI_ARCHITECTURE.md`, and `CI_INTEGRATION.md` that still
+  referenced the pre-v5.2.0 risk-point thresholds.
+
+---
+
+## [5.2.1] - 2026-02-25
+
+### False Positive Reduction — Test Content Gate
+
+- **PW-FLAKE-001 / PW-FLAKE-002**: Added `testContentOnly` gate — files without test
+  framework DSL (`test()`, `it()`, `describe()`) or page object patterns are now skipped,
+  even when matched by directory globs like `**/fixtures/**`. Prevents false positives on
+  utility/infrastructure files (e.g., resource managers with legitimate `setTimeout`).
+- **PW-FLAKE-001**: Widened retry/backoff suppression window from ±1 to ±10 lines so that
+  `setTimeout` inside exponential backoff loops (where the `while` is several lines above)
+  is correctly suppressed.
+- **PW-STABILITY-005**: Now recognizes variable-based cleanup in `afterAll`/`afterEach` hooks
+  (e.g., `slPage?.close()`) in addition to literal cleanup (`page.close()`). Fixes false
+  positives when browser contexts/pages are assigned to variables and cleaned up by name.
+- **ARCH-011** (Low) — New rule: detects emoji/pictographic characters in `console.log`,
+  `console.warn`, `console.error`, `console.info`, and `console.debug` calls. Emoji can
+  render as garbled characters in CI logs or break log aggregator parsing. Weighted at 1.2x
+  via the existing ARCH multiplier in scoring.
+- **PW-FLAKE-001**: Now also detects `page.pause()` — a debug-only method that halts
+  execution and opens the Playwright Inspector. Must be removed before committing.
+- **PW-FLAKE-002**: Severity lowered from Medium to **Low**. Force-clicks have legitimate
+  uses (e.g., testing modal dismiss-on-outside-click). Scoring impact reduced from 2 to 1
+  base points via the existing `severityScore()` calculation.
+
+---
+
+## [5.2.0] - 2026-02-24
+
+### Scoring Redesign — Health Score (0–100, higher = better)
+
+- **Breaking change**: The `riskScore` field now contains a 0–100 health score instead of
+  unbounded risk points. Higher values mean healthier repos. The field name is unchanged
+  to preserve the `ScanResult` contract.
+- New scoring formula: `healthScore = round(100 * exp(-riskPoints / 80))` — exponential
+  decay maps raw risk points to an intuitive bounded scale.
+- New grade thresholds: A (≥80), B (≥60), C (≥40), D (≥25), F (<25).
+- New exported helpers: `riskPointsToHealthScore()`, `gradeFromHealthScore()` in `scoring.ts`.
+- Default `.auditrc.json` thresholds updated: `{ gradeA: 80, gradeB: 60, gradeC: 40 }`.
+- Report hero card now shows `Grade A (92/100)` style with updated footnote.
+- Dashboard: all pages updated — trend direction flipped (score up = good), progress bars
+  use 0–100 range, labels renamed from "Risk Score" to "Health Score".
+- Database migration (`health_score_v1`): existing stored risk_score values automatically
+  converted to health scores on first dashboard startup.
+
+---
+
 ## [5.1.0] - 2026-02-24
 
 ### New Audit Rules — Resource Leaks, Over-Assertion, Inline Test Data

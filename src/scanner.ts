@@ -37,6 +37,8 @@ export type Inventory = {
   cypressConfigSummary?: CypressConfigSummary;
   cypressTestFiles?: number;
   seleniumTestFiles?: number;
+  /** Total individual test cases (test() + test.only() calls) across all Playwright test files. */
+  testCases?: number;
 };
 
 export type ScanResults = {
@@ -269,38 +271,43 @@ type Rule = {
   maxEvidence?: number;
   /** When set, this rule only runs if the framework is in inventory.detectedFrameworks */
   framework?: string;
+  /** When true, skip files that don't contain test framework DSL or page object patterns */
+  testContentOnly?: boolean;
 };
 
 const RULES: Rule[] = [
   {
     id: "PW-FLAKE-001",
-    title: "Hard waits detected (waitForTimeout / setTimeout)",
+    title: "Hard waits or debug pauses detected (waitForTimeout / setTimeout / page.pause)",
     severity: "high",
     description:
-      "Hard waits increase flakiness and slow tests. Prefer condition-based waits.",
+      "Hard waits increase flakiness and slow tests. page.pause() is a debug-only method that halts execution and opens the Playwright Inspector — it must be removed before committing.",
     recommendation:
-      "Replace hard waits with Playwright auto-waiting + explicit expect(). Use locator waits and targeted network waits.\nhttps://playwright.dev/docs/api/class-page#page-wait-for-timeout",
+      "Replace hard waits with Playwright auto-waiting + explicit expect(). Remove all page.pause() calls before merging.\nhttps://playwright.dev/docs/api/class-page#page-wait-for-timeout",
     patterns: [
       /waitForTimeout\s*\(/g,
       /\bsetTimeout\s*\(/g,
       /new\s+Promise\s*\(\s*resolve\s*=>\s*setTimeout/g,
       /new\s+Promise\s*\(\s*r\s*=>\s*setTimeout/g,
+      /\.pause\s*\(\s*\)/g,
     ],
     // Focus on test files and POMs - exclude helper utilities where delays may be legitimate
     fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js", "**/POMs/**/*.ts", "**/pages/**/*.ts", "**/fixtures/**/*.ts"],
     maxEvidence: 25,
+    testContentOnly: true,
   },
   {
     id: "PW-FLAKE-002",
     title: "Force-click usage detected",
-    severity: "medium",
-    description: "Force clicks can hide real UI issues and timing problems.",
+    severity: "low",
+    description: "Force clicks bypass Playwright’s actionability checks. While there are legitimate uses (e.g., clicking outside a modal to close it), widespread usage may hide real UI issues.",
     recommendation:
-      "Investigate why the element isn’t actionable. Prefer expect(locator).toBeVisible()/toBeEnabled() and stable locators.",
+      "Review each force-click for legitimacy. Prefer expect(locator).toBeVisible()/toBeEnabled() and stable locators. Legitimate cases include clicking overlays or testing dismiss-on-outside-click behavior.",
     patterns: [/force\s*:\s*true/g],
     fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js", "**/POMs/**/*.ts", "**/pages/**/*.ts", "**/fixtures/**/*.ts"],
     maxEvidence: 25,
     framework: "playwright",
+    testContentOnly: true,
   },
   {
     id: "PW-LOC-001",
@@ -747,6 +754,27 @@ const RULES: Rule[] = [
     fileGlobs: ["**/*.py", "**/*.java", "**/*.ts", "**/*.js"],
     maxEvidence: 25,
   },
+
+  // ── Cross-framework: Emoji in logs ─────────────────────────────────
+  {
+    id: "ARCH-011",
+    title: "Emoji characters in log messages",
+    severity: "low",
+    description:
+      "Console output contains emoji/pictographic characters. Depending on your CI pipeline's log encoding, emoji can render as garbled characters (mojibake) or cause parsing issues in log aggregators, SIEM tools, and plain-text report archivers.",
+    recommendation:
+      "Replace emoji with plain-text equivalents in log messages:\n" +
+      "  console.log('✅ Test passed')  → console.log('[PASS] Test passed')\n" +
+      "  console.log('❌ Test failed')  → console.log('[FAIL] Test failed')\n" +
+      "  console.log('🚀 Starting...')  → console.log('[START] Starting...')\n" +
+      "  console.log('⚠️ Warning')      → console.log('[WARN] Warning')\n" +
+      "If emoji are intentional (e.g., for local dev UX), guard them behind an environment check or use a logger that strips non-ASCII for CI output.",
+    patterns: [
+      /console\.(?:log|warn|error|info|debug)\s*\(.*\p{Extended_Pictographic}/gu,
+    ],
+    fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js"],
+    maxEvidence: 25,
+  },
 ];
 
 function normalize(p: string) {
@@ -775,6 +803,22 @@ function isIgnored(filePath: string) {
   );
 }
 
+/**
+ * Returns true if file content contains test framework DSL or page-object patterns.
+ * Used to skip utility/infrastructure files that happen to match rule fileGlobs
+ * (e.g., resource managers living in fixtures/ directories).
+ */
+function hasTestContent(content: string): boolean {
+  // Test framework DSL: test(), it(), describe()
+  if (/\b(?:test|it)\s*\(/.test(content)) return true;
+  if (/\b(?:test\.)?describe\s*\(/.test(content)) return true;
+  // Playwright extended API: test.extend<, test.beforeAll(, test.use(, test.step(, etc.
+  if (/\btest\.(?:extend|beforeAll|beforeEach|afterAll|afterEach|step|use)\s*[(<]/.test(content)) return true;
+  // Page object pattern: class with this.page (POMs should still be scanned)
+  if (/\bclass\s+\w+/.test(content) && /\bthis\.page\b/.test(content)) return true;
+  return false;
+}
+
 function lineNumberAtIndex(text: string, idx: number) {
   let line = 1;
   for (let i = 0; i < idx && i < text.length; i++) {
@@ -797,13 +841,13 @@ function isLikelyFalsePositive(lines: string[], lineIdx: number, ruleId: string)
     return true;
   }
   
-  // PW-FLAKE-001: Tightened retry/polling context exclusion.
-  // Only suppress when the matched line ±1 is *inside an actual loop structure*
-  // (while/for/do) AND mentions retry/polling. Previously, any file mentioning
-  // "retry" anywhere would suppress all findings.
+  // PW-FLAKE-001: Retry/polling context exclusion.
+  // Suppress when the matched line ±10 is inside an actual loop structure
+  // (while/for/do) AND mentions retry/polling intent. The wide window catches
+  // real backoff loops where the setTimeout may be many lines from the while.
   if (ruleId === "PW-FLAKE-001") {
-    const start = Math.max(0, lineIdx - 1);
-    const end = Math.min(lines.length - 1, lineIdx + 1);
+    const start = Math.max(0, lineIdx - 10);
+    const end = Math.min(lines.length - 1, lineIdx + 10);
     const nearContext = lines.slice(start, end + 1).join("\n").toLowerCase();
 
     const hasLoopStructure = /\b(while|for|do)\b/.test(nearContext);
@@ -1209,9 +1253,27 @@ function findBrowserResourceLeaks(filePath: string, content: string): ResourceLe
   if (foundCreations.length === 0) return results;
 
   // Check if cleanup exists in an afterEach/afterAll hook
-  const hasCleanup = cleanupPatterns.some((p) => p.test(content));
+  const hasLiteralCleanup = cleanupPatterns.some((p) => p.test(content));
   const hasHook = hookPattern.test(content);
-  const cleanupInHook = hasCleanup && hasHook;
+
+  // Also check for variable-based cleanup: when a resource is assigned to a
+  // variable (e.g., slPage = await slContext.newPage()) and that variable is
+  // closed in a hook (e.g., slPage?.close() in afterAll).
+  let hasVarCleanup = false;
+  if (hasHook && !hasLiteralCleanup) {
+    const resourceAssignRe = /(?:(?:const|let|var)\s+)?(\w+)\s*=\s*await\s+[\w.]+\.(?:newContext|newPage|launch)\s*\(/g;
+    let am: RegExpExecArray | null;
+    while ((am = resourceAssignRe.exec(content)) !== null) {
+      const varName = am[1];
+      const closeRe = new RegExp(`\\b${varName}\\??\\s*\\.\\s*close\\s*\\(`);
+      if (closeRe.test(content)) {
+        hasVarCleanup = true;
+        break;
+      }
+    }
+  }
+
+  const cleanupInHook = hasHook && (hasLiteralCleanup || hasVarCleanup);
 
   if (!cleanupInHook) {
     results.push({
@@ -1688,6 +1750,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     for (const f of scopedFiles) {
       if (evidence.length >= max) break;
       const content = await fs.readFile(f, "utf8");
+      // Skip non-test files for rules that only target test content
+      if (rule.testContentOnly && !hasTestContent(content)) continue;
       const ev = await collectEvidence(
         normalize(f),
         content,
@@ -1811,6 +1875,9 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   const filteredTestFiles = testFiles.filter((f) => !isIgnored(f));
 
+  // Accumulate individual test case count across all Playwright test files
+  let totalTestCases = 0;
+
   // PW-STABILITY-001: Shared state / missing cleanup hooks
   // Categorize files by risk level
   const filesNoHooksAtAll: Array<{file: string; testCount: number; analysis: TestFileAnalysis}> = [];
@@ -1830,6 +1897,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     try {
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestFile(content);
+      totalTestCases += analysis.testCount;
 
       // STABILITY-003: Flag any beforeAll using the Playwright page fixture
       // This commonly causes shared browser state and flaky cascades.
@@ -1882,6 +1950,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       continue;
     }
   }
+
+  inventory.testCases = totalTestCases;
 
   // STABILITY-003 finding
   if (beforeAllUsesPage.length > 0) {

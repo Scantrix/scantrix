@@ -32,9 +32,9 @@ const gradeColor: Record<string, string> = {
 };
 
 function riskBarColor(score: number) {
-  if (score <= 20) return "bg-emerald-500";
-  if (score <= 50) return "bg-blue-500";
-  if (score <= 85) return "bg-amber-500";
+  if (score >= 80) return "bg-emerald-500";
+  if (score >= 50) return "bg-blue-500";
+  if (score >= 30) return "bg-amber-500";
   return "bg-red-500";
 }
 
@@ -146,10 +146,10 @@ export default function ReposPage() {
                       <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
                         <div
                           className={`h-full rounded-full transition-all duration-500 ${riskBarColor(r.risk_score)}`}
-                          style={{ width: `${Math.min(100, (r.risk_score / 150) * 100)}%` }}
+                          style={{ width: `${Math.min(100, r.risk_score)}%` }}
                         />
                       </div>
-                      <p className="mt-1 text-[11px] text-muted-foreground">Risk score: {r.risk_score}</p>
+                      <p className="mt-1 text-[11px] text-muted-foreground">Health score: {r.risk_score}/100</p>
                     </div>
                   )}
                 </CardContent>
