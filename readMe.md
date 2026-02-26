@@ -251,7 +251,7 @@ Scantrix turns complex automation systems into:
 ## Quick Start
 
 ### Scan a repository
-```powershell
+```command
 npm run audit -- "C:\Repositories\Service.Playwright.Automation" --out "audit-out\service-pw-automation"
 ```
 
@@ -304,3 +304,13 @@ Then open http://localhost:3000 in a browser.
 |--------|---------|-------------|-----------|
 | CLI snapshots | `audit-out/snapshots/*.json` | Auto-saved every scan | Console diff summary |
 | Web dashboard | `dashboard/data/scantrix.db` | `scantrix push` or SQLite sink | http://localhost:3000/trends |
+
+
+
+###Temporary 
+```powershell
+C:\Repositories\repo-audit-agent> npx ts-node src/cli.ts push "audit-out/service-pw-automation/findings.json" `
+>>   --url "http://localhost:3000" `
+>>   --key dev `
+>>   --repo "Service.Playwright.Automation"
+```

@@ -1,6 +1,6 @@
 You are working on Repo Audit Agent (Scantrix), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
-**Version:** 5.0.0
+**Version:** 5.2.2
 
 Your goals:
 
@@ -42,7 +42,7 @@ You should treat audit_summary.md as the primary product surface.
 - `src/auditConfig.ts` — `.auditrc.json` loading, merging, and default generation
 - `src/pushClient.ts` — HTTP client for pushing findings to the Scantrix dashboard API (legacy push subcommand)
 - `src/sarifFormatter.ts` — SARIF 2.1.0 output formatter
-- `src/scoring.ts` — Single source of truth for risk score/grade calculation
+- `src/scoring.ts` — Single source of truth for risk score/grade calculation; density-normalized λ scaling based on suite size
 
 ### Sink Architecture (v5.0.0)
 Every scan produces a `ScanResult` payload routed through pluggable sinks:
@@ -110,7 +110,7 @@ average risk score over time (up to the last 24 data points from `/api/trends`).
 | `TREND_GREEN/RED/BLUE` | HSL color constants |
 
 ### Test Suite
-- 138 tests across 11 test files (vitest 3.2.4)
+- 170 tests across 12 test files (vitest 3.2.4)
 - Fixture repos: bad-repo, good-repo, complex-config-repo, cypress-repo, selenium-repo, deprecated-repo
 
 First review the repo_audit_agent_project_overview_handoff_guide.md

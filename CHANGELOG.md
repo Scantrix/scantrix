@@ -1,5 +1,100 @@
 # Changelog
 
+## [5.2.2] - 2026-02-25
+
+### Density-Normalized Health Scoring
+
+- Health score now factors in test suite size via **density normalization**. The decay constant
+  (λ) is scaled by suite size: `λ = 80 × clamp(1.0 + 0.5 × log₂(testFiles / 50), 1.0, 3.5)`.
+  Larger suites get a more forgiving decay, so the same risk points yield a higher health score.
+- Suites with ≤ 50 test files see no change (neutral point). 100 files → 1.5× λ, 200 → 2.0×,
+  1,000 → 2.66×, 3,200+ → capped at 3.5×.
+- When no inventory data is available, scoring behavior is identical to the previous version.
+- Report hero card now shows density adjustment details in the footnote.
+- `ScanResult.summary` includes optional `densityAdjustment` metadata.
+- New test file: `tests/scoring.test.ts` with 19 unit tests covering all density scenarios.
+
+---
+
+## [5.2.1] - 2026-02-25
+
+### False Positive Reduction — Test Content Gate
+
+- **PW-FLAKE-001 / PW-FLAKE-002**: Added `testContentOnly` gate — files without test
+  framework DSL (`test()`, `it()`, `describe()`) or page object patterns are now skipped,
+  even when matched by directory globs like `**/fixtures/**`. Prevents false positives on
+  utility/infrastructure files (e.g., resource managers with legitimate `setTimeout`).
+- **PW-FLAKE-001**: Widened retry/backoff suppression window from ±1 to ±10 lines so that
+  `setTimeout` inside exponential backoff loops (where the `while` is several lines above)
+  is correctly suppressed.
+- **PW-STABILITY-005**: Now recognizes variable-based cleanup in `afterAll`/`afterEach` hooks
+  (e.g., `slPage?.close()`) in addition to literal cleanup (`page.close()`). Fixes false
+  positives when browser contexts/pages are assigned to variables and cleaned up by name.
+- **ARCH-011** (Low) — New rule: detects emoji/pictographic characters in `console.log`,
+  `console.warn`, `console.error`, `console.info`, and `console.debug` calls. Emoji can
+  render as garbled characters in CI logs or break log aggregator parsing. Weighted at 1.2x
+  via the existing ARCH multiplier in scoring.
+- **PW-FLAKE-001**: Now also detects `page.pause()` — a debug-only method that halts
+  execution and opens the Playwright Inspector. Must be removed before committing.
+- **PW-FLAKE-002**: Severity lowered from Medium to **Low**. Force-clicks have legitimate
+  uses (e.g., testing modal dismiss-on-outside-click). Scoring impact reduced from 2 to 1
+  base points via the existing `severityScore()` calculation.
+
+---
+
+## [5.2.0] - 2026-02-24
+
+### Scoring Redesign — Health Score (0–100, higher = better)
+
+- **Breaking change**: The `riskScore` field now contains a 0–100 health score instead of
+  unbounded risk points. Higher values mean healthier repos. The field name is unchanged
+  to preserve the `ScanResult` contract.
+- New scoring formula: `healthScore = round(100 * exp(-riskPoints / 80))` — exponential
+  decay maps raw risk points to an intuitive bounded scale.
+- New grade thresholds: A (≥80), B (≥50), C (≥30), D (≥15), F (<15).
+- New exported helpers: `riskPointsToHealthScore()`, `gradeFromHealthScore()` in `scoring.ts`.
+- Default `.auditrc.json` thresholds updated: `{ gradeA: 80, gradeB: 50, gradeC: 30 }`.
+- Report hero card now shows `Grade A (92/100)` style with updated footnote.
+- Dashboard: all pages updated — trend direction flipped (score up = good), progress bars
+  use 0–100 range, labels renamed from "Risk Score" to "Health Score".
+- Database migration (`health_score_v1`): existing stored risk_score values automatically
+  converted to health scores on first dashboard startup.
+
+---
+
+## [5.1.0] - 2026-02-24
+
+### New Audit Rules — Resource Leaks, Over-Assertion, Inline Test Data
+
+- **PW-STABILITY-005** (Medium) — Detects manual `chromium.launch()` / `browser.newContext()`
+  / `browser.newPage()` without corresponding `.close()` in afterEach/afterAll. Skips files
+  using Playwright's auto-cleaning `({ page })` fixture pattern.
+- **SE-STABILITY-001** (Medium) — Detects Selenium WebDriver creation (`webdriver.Chrome()`,
+  `new ChromeDriver()`, etc.) without `driver.quit()` in a teardown hook. Cross-language
+  support: Python, Java, TypeScript, JavaScript.
+- **PW-STABILITY-006** (Low) — Flags individual tests with >5 `expect()` assertions.
+  Tests that verify too many behaviors are harder to debug. Only emits when ≥3 tests exceed
+  the threshold. Skips data-driven loops.
+- **ARCH-010** (Low) — Cross-framework detection of hardcoded inline test data (usernames,
+  addresses, dates, prices, credit cards, zip codes) in test files. Requires variable-name-
+  anchored patterns (e.g., `firstName = 'John'`) to avoid false positives. Scans Playwright,
+  Cypress, and Selenium test files.
+
+### Report & Scoring
+
+- New findings integrate with existing scoring: ARCH-010 gets the 1.2x architecture multiplier.
+- `categorizeFindings()` and `calculateRemediationTime()` updated with effort estimates for
+  all 4 new rules.
+
+### Test Fixtures
+
+- New bad-repo fixtures: `resource-leak.spec.ts`, `over-asserted.spec.ts`
+- New selenium-repo fixture: `test_checkout.py` (resource leak + inline data)
+- New cypress-repo fixture: `checkout.cy.ts` (inline data)
+- Modified bad-repo `checkout.spec.ts` with inline data patterns
+
+---
+
 ## [5.0.1] - 2026-02-22
 
 ### Dashboard — Delete Repository

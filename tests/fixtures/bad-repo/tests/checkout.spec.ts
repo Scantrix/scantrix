@@ -3,6 +3,12 @@ import { test, expect } from '@playwright/test';
 const phoneNumber = '+1-555-123-4567';
 const userEmail = 'testuser@example.com';
 const userPassword = 'SuperSecret123!';
+const firstName = 'John';
+const lastName = 'Doe';
+const streetAddress = '742 Evergreen Terrace';
+const zipCode = '62704';
+const birthDate = '03/15/1985';
+const cardNumber = '4111-1111-1111-1111';
 
 test('checkout flow', async ({ page }) => {
   await page.goto('https://staging.example.com/checkout');

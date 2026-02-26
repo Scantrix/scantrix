@@ -13,9 +13,10 @@ import { getDb } from "@/lib/db";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { name: string } },
+  { params }: { params: Promise<{ name: string }> },
 ) {
-  const repoName = decodeURIComponent(params.name);
+  const { name } = await params;
+  const repoName = decodeURIComponent(name);
   const { searchParams } = new URL(request.url);
   const scanIdParam = searchParams.get("scan");
 
@@ -155,9 +156,10 @@ export async function GET(
  */
 export async function DELETE(
   _request: NextRequest,
-  { params }: { params: { name: string } },
+  { params }: { params: Promise<{ name: string }> },
 ) {
-  const repoName = decodeURIComponent(params.name);
+  const { name } = await params;
+  const repoName = decodeURIComponent(name);
 
   try {
     const db = getDb();

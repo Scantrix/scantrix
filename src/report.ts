@@ -5,7 +5,7 @@ import type { ScanResults } from "./scanner";
 import type { PlaywrightConfigSummary } from "./configExtractor";
 import { toSarif } from "./sarifFormatter";
 import { loadBaseline, computeDiff, formatDiffMarkdown, type SnapshotMeta } from "./diffTracker";
-import { calculateRiskScore as sharedCalculateRiskScore } from "./scoring";
+import { calculateRiskScore as sharedCalculateRiskScore, type ScoreInventory } from "./scoring";
 
 function severityScore(sev: "low" | "medium" | "high") {
   return sev === "high" ? 3 : sev === "medium" ? 2 : 1;
@@ -83,6 +83,47 @@ function escapeHtml(input: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/**
+ * Transforms a recommendation string into proper Markdown so that
+ * markdown-it renders it with visible paragraph breaks and code blocks
+ * instead of collapsing everything into a single paragraph.
+ *
+ * - Consecutive indented lines (≥2 leading spaces) → fenced code block
+ * - Non-indented lines → separated by blank lines (paragraph breaks)
+ */
+function formatRecommendation(rec: string): string {
+  const lines = rec.split("\n");
+  if (lines.length <= 1) return rec;
+
+  const out: string[] = [];
+  let inCode = false;
+
+  for (const line of lines) {
+    const isIndented = /^\s{2,}/.test(line);
+
+    if (isIndented && !inCode) {
+      out.push("");
+      out.push("```");
+      out.push(line.trimStart());
+      inCode = true;
+    } else if (isIndented && inCode) {
+      out.push(line.trimStart());
+    } else if (!isIndented && inCode) {
+      out.push("```");
+      out.push("");
+      out.push(line);
+      inCode = false;
+    } else {
+      if (out.length > 0) out.push("");
+      out.push(line);
+    }
+  }
+
+  if (inCode) out.push("```");
+
+  return out.join("\n");
+}
+
 function toEmailFriendlyMarkdown(markdown: string): string {
   // Email clients often don't support <details>/<summary>. Flatten them.
   // Keep the summary text as a bold line.
@@ -114,271 +155,726 @@ function toEmailFriendlyMarkdown(markdown: string): string {
 
 type HtmlFlavor = "full" | "email";
 
-function wrapHtmlDocument(title: string, bodyHtml: string, flavor: HtmlFlavor = "full"): string {
-  // Professional indigo theme + details/summary polish
-  const baseCss = `
-    :root {
-      /* Neutral + background (modern enterprise) */
-      --bg: #f4f5f7;
-      --panel: #ffffff;
-      --text: #1a1f36;
-      --muted: #6b7280;
-      --border: #e2e4e8;
-      --header: #111827;
+interface WrapHtmlOptions {
+  sidebarLogoSvg?: string;
+}
 
-      /* Professional accent (Indigo) */
-      --accent: #4f46e5;
-      --accent-weak: #eef2ff;
+function wrapHtmlDocument(title: string, bodyHtml: string, flavor: HtmlFlavor = "full", opts: WrapHtmlOptions = {}): string {
+  if (flavor === "email") {
+    return wrapEmailDocument(title, bodyHtml);
+  }
 
-      /* Severity colors (muted, accessible) */
-      --good: #10b981;
-      --warn: #f59e0b;
-      --bad: #ef4444;
-    }
+  /* ── Enterprise report design system ─────────────────────────────── */
+  const css = `
+/* ── Design Tokens ── */
+:root {
+  --color-bg: #f5f6fa;
+  --color-surface: #ffffff;
+  --color-text: #1e293b;
+  --color-text-secondary: #475569;
+  --color-muted: #94a3b8;
+  --color-border: #e2e8f0;
+  --color-border-light: #f1f5f9;
+  --color-accent: #4c79f6;
+  --color-accent-light: #eef2ff;
+  --color-accent-hover: #386dca;
 
-    html { -webkit-text-size-adjust: 100%; }
+  --severity-high: #dc2626;
+  --severity-high-bg: #fef2f2;
+  --severity-high-border: #fecaca;
+  --severity-medium: #d97706;
+  --severity-medium-bg: #fffbeb;
+  --severity-medium-border: #fde68a;
+  --severity-low: #2563eb;
+  --severity-low-bg: #eff6ff;
+  --severity-low-border: #bfdbfe;
 
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
-      color: var(--text);
-      line-height: 1.4;
-      margin: 0;
-      padding: 16px;
-      background: ${flavor === "full" ? "var(--bg)" : "#ffffff"};
-      font-size: 14px;
-    }
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace;
 
-    main {
-      max-width: 1200px;
-      margin: 0 auto;
-      background: ${flavor === "full" ? "var(--panel)" : "transparent"};
-      border: ${flavor === "full" ? "1px solid var(--border)" : "0"};
-      border-radius: ${flavor === "full" ? "8px" : "0"};
-      padding: ${flavor === "full" ? "16px 20px" : "0"};
-      box-shadow: ${flavor === "full" ? "0 4px 12px rgba(0,0,0,0.05)" : "none"};
-    }
+  --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px;
+  --space-5: 20px; --space-6: 24px; --space-8: 32px; --space-10: 40px;
 
-    h1, h2, h3, h4 { line-height: 1.2; margin: 12px 0 6px; }
-    h1 { margin-top: 0; color: var(--header); letter-spacing: -0.01em; font-size: 1.75em; }
-    h2 { padding-bottom: 4px; border-bottom: 1px solid var(--border); color: var(--header); font-size: 1.4em; }
-    h3 { font-size: 1.15em; }
-    h4 { font-size: 1em; }
+  --radius-sm: 4px; --radius-md: 6px; --radius-lg: 8px; --radius-xl: 12px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.07), 0 2px 4px rgba(0,0,0,0.04);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.08), 0 4px 6px rgba(0,0,0,0.03);
+  --sidebar-w: 224px;
+}
 
-    p { margin: 4px 0; }
-    ul, ol { padding-left: 18px; margin: 4px 0; }
-    li { margin: 2px 0; }
+/* ── Reset & Base ── */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; scroll-padding-top: 24px; }
+body {
+  font-family: var(--font-sans); color: var(--color-text); line-height: 1.6;
+  margin: 0; padding: 0; background: var(--color-bg); font-size: 14px;
+  -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale;
+}
 
-    hr {
-      border: 0;
-      border-top: 18px solid var(--border);
-      margin: 12px 0;
-    }
+/* ── Layout ── */
+.report-layout { display: flex; min-height: 100vh; }
 
-    a { color: var(--accent); text-decoration: none; }
-    a:hover { text-decoration: underline; }
+/* ── Sidebar ── */
+.sidebar {
+  position: fixed; top: 0; left: 0; bottom: 0; width: var(--sidebar-w);
+  background: var(--color-surface); border-right: 1px solid var(--color-border);
+  padding: var(--space-6) 0; overflow-y: auto; z-index: 10;
+  display: flex; flex-direction: column;
+}
+.sidebar-brand { padding: 0 var(--space-5); margin-bottom: var(--space-5); }
+.sidebar-brand img { max-width: 140px; height: auto; }
+.sidebar-brand .brand-logo { display: block; color: var(--color-text); }
+.sidebar-brand .brand-logo svg { width: 140px; height: auto; display: block; }
+.sidebar-brand .brand-text {
+  font-size: 15px; font-weight: 700; color: var(--color-text); letter-spacing: -0.02em;
+}
+.sidebar-label {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--color-muted); padding: var(--space-2) var(--space-5) var(--space-1);
+}
+.sidebar-nav { list-style: none; margin: 0; padding: 0; flex: 1; }
+.sidebar-nav li { margin: 0; padding: 0; }
+.sidebar-nav a {
+  display: block; padding: 6px var(--space-5); color: var(--color-text-secondary);
+  font-size: 13px; font-weight: 500; text-decoration: none;
+  border-left: 6px solid transparent; transition: all 120ms ease;
+}
+.sidebar-nav a:hover { color: var(--color-text); background: var(--color-border-light); }
+.sidebar-nav a.active {
+  color: var(--color-accent); border-left-color: var(--color-accent);
+  background: var(--color-accent-light); font-weight: 600;
+}
+.sidebar-actions {
+  padding: var(--space-3) var(--space-5); border-top: 1px solid var(--color-border); margin-top: auto;
+}
+.sidebar-actions button:not(.theme-toggle-track) {
+  display: block; width: 100%; padding: 6px var(--space-3); margin-bottom: 6px;
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  background: var(--color-surface); color: var(--color-text-secondary);
+  font-size: 12px; font-family: inherit; cursor: pointer; text-align: left;
+  transition: all 120ms ease;
+}
+.sidebar-actions button:not(.theme-toggle-track):hover { background: var(--color-border-light); color: var(--color-text); }
 
-    code {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-      font-size: 0.9em;
-      background: #f3f4f6;
-      border: 1px solid #e5e7eb;
-      border-radius: 4px;
-      padding: 0 0.2em;
-    }
+/* ── Main Content ── */
+.report-main {
+  margin-left: var(--sidebar-w); flex: 1; min-width: 0;
+  padding: var(--space-8) var(--space-10);
+}
+.report-content { max-width: 1060px; margin: 0 auto; }
 
-    pre {
-      background: #1e1b4b; /* deep indigo for code blocks */
-      color: #f3f4f6;
-      padding: 8px;
-      overflow-x: auto;
-      border-radius: 6px;
-      border: 1px solid rgba(148, 163, 184, 0.25);
-      margin: 8px 0;
-      font-size: 0.85em;
-    }
-    pre code {
-      color: inherit;
-      background: transparent;
-      border: 0;
-      padding: 0;
-    }
+/* ── Typography ── */
+h1, h2, h3, h4 { line-height: 1.3; font-weight: 700; color: var(--color-text); }
+h1 { font-size: 1.75rem; margin: 0 0 var(--space-2); letter-spacing: -0.02em; }
+h2 {
+  font-size: 1.25rem; margin: var(--space-6) 0 var(--space-3);
+  padding-bottom: 0; border-bottom: none;
+}
+h3 { font-size: 1.05rem; margin: var(--space-6) 0 var(--space-3); }
+h4 { font-size: 0.92rem; margin: var(--space-4) 0 var(--space-2); }
 
-    /* Blockquotes: very light tint to avoid blending with summary/finding titles */
-    blockquote {
-      margin: 8px 0.5em;
-      padding: 6px 10px;
-      border-left: 3px solid #C7D2FE; /* indigo-200 */
-      background: #F3F4FF; /* indigo-50 */
-      color: #1f2937;
-      border-radius: 4px;
-      font-size: 0.95em;
-    }
+p { margin: var(--space-2) 0; }
+ul, ol { padding-left: var(--space-5); margin: var(--space-2) 0; }
+li { margin: var(--space-1) 0; }
 
-    img { max-width: 100%; height: auto; }
+hr { border: 0; height: 1px; background: var(--color-border); margin: var(--space-8) 0; }
+a { color: var(--color-accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+a:focus-visible { outline: 2px solid var(--color-accent); outline-offset: 2px; border-radius: 2px; }
 
-    /* Tables */
-    table {
-      width: 100%;
-      margin: 8px 0;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      border-collapse: separate;
-      border-spacing: 0;
-      overflow: hidden;
-      background: #fff;
-      font-size: 0.9em;
-    }
+/* ── Code ── */
+code {
+  font-family: var(--font-mono); font-size: 0.84em;
+  background: #f1f5f9; border: 1px solid #e2e8f0; border-radius: var(--radius-sm);
+  padding: 1px 5px; color: #0f172a;
+}
+pre {
+  background: #0f172a; color: #e2e8f0; padding: var(--space-4); overflow-x: auto;
+  border-radius: var(--radius-lg); border: 1px solid #1e293b;
+  margin: var(--space-4) 0; font-size: 13px; line-height: 1.5;
+}
+pre code { color: inherit; background: transparent; border: 0; padding: 0; }
 
-    th, td {
-      border-bottom: 1px solid var(--border);
-      padding: 6px 8px;
-      vertical-align: top;
-      text-align: left;
-    }
+/* ── Blockquotes ── */
+blockquote {
+  margin: var(--space-4) 0; padding: var(--space-3) var(--space-5) var(--space-3) var(--space-6);
+  border-left: 3px solid var(--color-accent); background: var(--color-accent-light);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  color: var(--color-text-secondary); font-size: 0.9em;
+}
+details.finding-card blockquote { margin-left: var(--space-2); }
+blockquote p { margin: var(--space-1) 0; max-width: none; }
 
-    th {
-      background: #f9fafb;
-      color: var(--header);
-      font-weight: 600;
-      font-size: 0.9em;
-    }
+img { max-width: 100%; height: auto; }
 
-    tbody tr:nth-child(even) td { background: #fdfdff; }
-    tbody tr:last-child td { border-bottom: 0; }
+/* ── Tables ── */
+table {
+  width: 100%; margin: var(--space-4) 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); border-collapse: separate; border-spacing: 0;
+  overflow: hidden; background: var(--color-surface); font-size: 13px;
+}
+th, td {
+  padding: var(--space-2) var(--space-3); text-align: left;
+  border-bottom: 1px solid var(--color-border); vertical-align: top;
+  line-height: 1.3;
+}
+td:last-child { white-space: nowrap; }
+th {
+  background: #f8fafc; font-weight: 600; font-size: 11px;
+  text-transform: uppercase; letter-spacing: 0.04em; color: var(--color-text-secondary);
+  position: sticky; top: 0; z-index: 1;
+}
+tbody tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: #f1f5f9; }
 
-    /* <details> blocks are used for findings in the full report. */
-    details {
-      margin: 8px 0.5em;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #fafbff;
-      overflow: hidden;
-    }
+/* ── Grade Card ── */
+.grade-card {
+  display: inline-flex; align-items: center; gap: var(--space-4);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl); padding: var(--space-4) var(--space-6);
+  box-shadow: var(--shadow-md); margin: var(--space-4) 0;
+}
+.grade-letter {
+  font-size: 2.5rem; font-weight: 800; line-height: 1; min-width: 56px; text-align: center;
+}
+.grade-a { color: #059669; } .grade-b { color: #10b981; }
+.grade-c { color: #d97706; } .grade-d { color: #dc2626; } .grade-f { color: #991b1b; }
+.grade-detail { display: flex; flex-direction: column; gap: 2px; }
+.grade-level { font-weight: 600; font-size: 0.95rem; }
+.grade-desc { font-size: 0.85rem; color: var(--color-text-secondary); }
 
-    summary {
-      cursor: pointer;
-      padding: 6px 10px 6px 30px; /* room for custom chevron */
-      background: #f9fafb;
-      border-bottom: 1px solid var(--border);
-      list-style: none;
-      position: relative;
-      font-size: 0.95em;
-    }
+/* ── Stat Grid ── */
+.stat-grid {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: var(--space-4); margin: var(--space-4) 0;
+}
+.stat-card {
+  display: flex; flex-direction: column; padding: var(--space-4) var(--space-5);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); box-shadow: var(--shadow-sm);
+}
+.stat-label {
+  font-size: 11px; font-weight: 600; color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.stat-value { font-size: 1.75rem; font-weight: 700; margin-top: var(--space-1); line-height: 1.2; }
+.stat-high { color: var(--severity-high); }
+.stat-medium { color: var(--severity-medium); }
+.stat-low { color: var(--severity-low); }
 
-    /* Remove native disclosure triangle in ALL browsers (prevents double chevrons) */
-    summary::-webkit-details-marker,
-    summary::marker,
-    summary::-moz-list-bullet {
-      display: none;
-      font-size: 0;
-    }
+/* ── Severity Badges ── */
+.badge {
+  display: inline-flex; align-items: center; padding: 2px 8px; border-radius: 9999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.02em;
+  white-space: nowrap; vertical-align: middle;
+}
+.badge-high { background: var(--severity-high-bg); color: var(--severity-high); border: 1px solid var(--severity-high-border); }
+.badge-medium { background: var(--severity-medium-bg); color: var(--severity-medium); border: 1px solid var(--severity-medium-border); }
+.badge-low { background: var(--severity-low-bg); color: var(--severity-low); border: 1px solid var(--severity-low-border); }
 
-    /* Custom chevron */
-    summary::after {
-      content: "▸";
-      position: absolute;
-      left: 10px;
-      top: 50%;
-      transform: translateY(-50%);
-      color: var(--muted);
-      font-size: 14px;
-      line-height: 1;
-      transition: transform 180ms ease, color 180ms ease;
-    }
+/* ── Findings: Details/Summary ── */
+details.finding-card {
+  margin: var(--space-3) 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); background: var(--color-surface);
+  overflow: hidden; box-shadow: var(--shadow-sm); transition: box-shadow 150ms ease;
+}
+details.finding-card:hover { box-shadow: var(--shadow-md); }
+details.finding-card[data-severity="high"]   { border-left: 3px solid var(--severity-high); }
+details.finding-card[data-severity="medium"] { border-left: 3px solid var(--severity-medium); }
+details.finding-card[data-severity="low"]    { border-left: 3px solid var(--severity-low); }
 
-    /* Hierarchy: hover < open < finding title (shade) */
-    summary:hover {
-      background: #E6E8FF; /* indigo-100 */
-    }
+details.finding-card summary {
+  cursor: pointer; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-8);
+  list-style: none; position: relative; font-size: 0.9rem;
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap;
+  user-select: none;
+}
+details.finding-card summary::-webkit-details-marker,
+details.finding-card summary::marker { display: none; }
+details.finding-card summary::before {
+  content: ""; position: absolute; left: 14px; top: 50%;
+  width: 6px; height: 6px; border-right: 2px solid var(--color-muted);
+  border-bottom: 2px solid var(--color-muted);
+  transform: translateY(-50%) rotate(-45deg); transition: transform 150ms ease;
+}
+details.finding-card[open] summary::before { transform: translateY(-60%) rotate(45deg); }
+details.finding-card summary:hover { background: #f8fafc; }
+details.finding-card[open] summary {
+  background: #f1f5f9; border-bottom: 1px solid var(--color-border);
+}
+details.finding-card > *:not(summary) { padding: var(--space-3) var(--space-4); }
 
-    details[open] summary {
-      background: #DCE0FF; /* indigo-150 */
-    }
+/* Legacy details (config, CI, etc.) */
+details:not(.finding-card) {
+  margin: var(--space-3) 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg); background: var(--color-surface); overflow: hidden;
+}
+details:not(.finding-card) summary {
+  cursor: pointer; padding: var(--space-3) var(--space-4) var(--space-3) var(--space-8);
+  list-style: none; position: relative; font-weight: 500;
+}
+details:not(.finding-card) summary::-webkit-details-marker,
+details:not(.finding-card) summary::marker { display: none; }
+details:not(.finding-card) summary::before {
+  content: ""; position: absolute; left: 14px; top: 50%;
+  width: 6px; height: 6px; border-right: 2px solid var(--color-muted);
+  border-bottom: 2px solid var(--color-muted);
+  transform: translateY(-50%) rotate(-45deg); transition: transform 150ms ease;
+}
+details:not(.finding-card)[open] summary::before { transform: translateY(-60%) rotate(45deg); }
+details:not(.finding-card) summary:hover { background: #f8fafc; }
+details:not(.finding-card)[open] summary { border-bottom: 1px solid var(--color-border); }
+details:not(.finding-card) > *:not(summary) { padding: var(--space-3) var(--space-6); }
+details:not(.finding-card) > table {
+  width: calc(100% - var(--space-6) * 2); margin: var(--space-3) var(--space-6);
+  padding: 0; box-sizing: border-box;
+}
+details:not(.finding-card) > ul,
+details:not(.finding-card) > p + ul { padding-left: calc(var(--space-6) + var(--space-5)); padding-right: var(--space-6); }
 
-    details[open] summary::after {
-      transform: translateY(-50%) rotate(90deg);
-      color: var(--accent);
-    }
+/* ── Finding sub-blocks ── */
+.finding-block {
+  margin: var(--space-3) 0; border: 1px solid var(--color-border);
+  border-radius: var(--radius-md); background: var(--color-surface); overflow: hidden;
+}
+.finding-block-title {
+  padding: var(--space-2) var(--space-3); font-weight: 600; font-size: 12px;
+  text-transform: uppercase; letter-spacing: 0.03em; color: var(--color-text-secondary);
+  background: #f8fafc; border-bottom: 1px solid var(--color-border);
+}
+.finding-block-body { padding: var(--space-3) var(--space-4); font-size: 0.9em; }
+.finding-block-body p { margin: var(--space-2) 0; }
+.finding-block-body ul { margin: var(--space-2) 0; padding-left: var(--space-5); }
+.finding-block-body li { margin: var(--space-1) 0; }
+.finding-block-body table { margin: 0; font-size: 12px; table-layout: fixed; }
+.finding-block-body table th:first-child,
+.finding-block-body table td:first-child { width: 30%; }
+.finding-block-body table td:last-child { text-align: left; white-space: normal; }
+.finding-block-body table td code { word-break: break-all; white-space: pre-wrap; }
 
-    /* Correct inner padding for expanded content */
-    details > *:not(summary) {
-      padding: 8px 10px;
-    }
+/* ── Filter Bar ── */
+.filter-bar {
+  display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap;
+  margin: var(--space-4) 0 var(--space-6); padding: var(--space-3) var(--space-4);
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+}
+.filter-bar label {
+  font-size: 12px; font-weight: 600; color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.04em;
+}
+.filter-btn {
+  padding: var(--space-1) var(--space-3); border: 1px solid var(--color-border);
+  border-radius: 9999px; background: var(--color-surface); color: var(--color-text-secondary);
+  font-size: 12px; font-weight: 500; font-family: inherit; cursor: pointer;
+  transition: all 120ms ease;
+}
+.filter-btn:hover { background: var(--color-border-light); }
+.filter-btn.active { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
+.filter-search {
+  margin-left: auto; padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--color-border); border-radius: var(--radius-md);
+  font-size: 13px; font-family: inherit; color: var(--color-text);
+  background: var(--color-surface); min-width: 180px;
+}
+.filter-search::placeholder { color: var(--color-muted); }
+.filter-search:focus {
+  outline: none; border-color: var(--color-accent);
+  box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+}
 
-    /* Section headers inside expanded details */
-    details h4 {
-      margin: 10px 0 6px;
-      font-size: 0.9rem;
-      font-weight: 700;
-      color: #0f172a;
-      padding: 4px 8px;
-      border: 1px solid var(--border);
-      background: #ffffff;
-      border-radius: 6px;
-      display: inline-block;
-    }
+/* ── Report Footer ── */
+.report-footer-logo { display: block; margin: var(--space-3) auto; max-width: 200px; width: 100%; height: auto; }
+.report-footer-text { margin: var(--space-2) 0; color: var(--color-muted); font-size: 0.9em; text-align: center; }
 
-    /* Sub-blocks inside expanded findings */
-    .finding-block {
-      margin: 8px 0.5em;
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      background: #ffffff;
-      overflow: hidden;
-    }
+/* ── Back to Top ── */
+.back-to-top {
+  position: fixed; bottom: var(--space-6); right: var(--space-6);
+  width: 40px; height: 40px; border-radius: 50%;
+  border: 1px solid var(--color-border); background: var(--color-surface);
+  color: var(--color-text-secondary); font-size: 18px; cursor: pointer;
+  box-shadow: var(--shadow-md); opacity: 0; transform: translateY(10px);
+  transition: opacity 200ms ease, transform 200ms ease;
+  z-index: 20; display: flex; align-items: center; justify-content: center;
+}
+.back-to-top.visible { opacity: 1; transform: translateY(0); }
+.back-to-top:hover { background: var(--color-accent); color: #fff; border-color: var(--color-accent); }
 
-    .finding-block-title {
-      padding: 6px 10px;
-      font-weight: 600;
-      color: var(--header);
-      background: #D4D8FF;             /* indigo-200 (distinct from summary open + blockquote) */
-      border-bottom: 1px solid var(--border);
-      font-size: 0.9em;
-      border-radius: 4px;
-    }
+.hidden { display: none !important; }
 
-    .finding-block-body { padding: 8px 10px; font-size: 0.9em; }
-    .finding-block-body p { margin: 6px 0; }
-    .finding-block-body ul { margin: 4px 0 4px 14px; padding-left: 14px; }
-    .finding-block-body li { margin: 2px 0; }
+/* ── Section Cards ── */
+.section-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  margin: var(--space-3) 0 var(--space-4);
+  box-shadow: var(--shadow-sm);
+}
+.section-card > *:first-child { margin-top: 0; }
+.section-card > *:last-child { margin-bottom: 0; }
+.section-card hr { display: none; }
 
-    .finding-block-body table {
-      margin: 0;
-      border-radius: 6px;
-      border: 1px solid var(--border);
-    }
+/* ── Theme Toggle ── */
+.theme-toggle {
+  display: flex; align-items: center; gap: var(--space-3);
+  padding: 0 0 var(--space-2); margin-bottom: var(--space-2);
+}
+.theme-toggle-track {
+  position: relative; width: 40px; min-width: 40px; max-width: 40px;
+  height: 22px; flex-shrink: 0;
+  background: #94a3b8; border-radius: 9999px;
+  cursor: pointer; transition: background 200ms ease;
+  border: none; padding: 0; margin: 0;
+}
+.theme-toggle-track::after {
+  content: ''; position: absolute; top: 3px; left: 3px;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: #ffffff; box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+  transition: transform 200ms ease;
+}
+[data-theme="dark"] .theme-toggle-track { background: var(--color-accent); }
+[data-theme="dark"] .theme-toggle-track::after { transform: translateX(18px); background: #1e293b; }
+.theme-toggle-label {
+  font-size: 12px; color: var(--color-text-secondary); user-select: none;
+}
 
-    .report-footer-logo {
-      display: block;
-      margin: 10px auto 6px;
-      max-width: 260px;
-      width: 100%;
-      height: auto;
-    }
+/* ── Report Meta ── */
+.report-meta {
+  display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5);
+  padding: var(--space-3) 0; margin: var(--space-2) 0 var(--space-4);
+  font-size: 13px; color: var(--color-text-secondary);
+  border-bottom: 1px solid var(--color-border);
+}
+.report-meta .meta-item { white-space: nowrap; }
+.report-meta code { font-size: 12px; }
 
-    .report-footer-text {
-      margin: 4px 0;
-      color: var(--muted);
-      font-size: 0.95em;
-    }
+/* ── Hero Card ── */
+.hero-card {
+  background: var(--color-surface); border: 1px solid var(--color-border);
+  border-radius: var(--radius-xl); padding: var(--space-6);
+  box-shadow: var(--shadow-md); margin: var(--space-4) 0;
+}
+.hero-grade {
+  display: flex; align-items: center; gap: var(--space-4);
+  padding-bottom: var(--space-5); border-bottom: 1px solid var(--color-border);
+  margin-bottom: var(--space-5);
+}
+.hero-stats {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--space-4);
+}
+.hero-stats .stat-card { box-shadow: none; border: 1px solid var(--color-border-light); }
+.hero-footnote {
+  margin-top: var(--space-4); padding-top: var(--space-3);
+  border-top: 1px solid var(--color-border-light);
+  font-size: 12px; color: var(--color-muted); font-style: italic;
+}
+
+/* ── Severity Matrix ── */
+.severity-matrix table { font-size: 13px; }
+.severity-matrix td:not(:first-child),
+.severity-matrix th:not(:first-child) { text-align: center; width: 80px; }
+.severity-matrix td:first-child { font-weight: 500; }
+
+/* ── Effort Badges ── */
+.effort-quick { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; }
+.effort-strategic { background: #eff6ff; color: #2563eb; border: 1px solid #bfdbfe; }
+
+/* ── Config Summary ── */
+.config-summary { font-size: 13px; color: var(--color-text-secondary); margin: var(--space-2) 0; }
+
+/* ── Filter Count ── */
+.filter-count { font-size: 12px; color: var(--color-muted); margin: 0 0 var(--space-3); min-height: 16px; }
+
+/* ── Stat Card Severity Tinting ── */
+.stat-card-high { border-left: 3px solid var(--severity-high); }
+.stat-card-medium { border-left: 3px solid var(--severity-medium); }
+.stat-card-low { border-left: 3px solid var(--severity-low); }
+
+/* ── Dark Theme ── */
+[data-theme="dark"] {
+  --color-bg: #0f172a;
+  --color-surface: #1e293b;
+  --color-text: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-muted: #64748b;
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+  --color-accent: #4c79f6;
+  --color-accent-light: rgba(99, 102, 241, 0.1);
+  --color-accent-hover: #6366f1;
+  --severity-high-bg: rgba(220, 38, 38, 0.15);
+  --severity-high-border: rgba(220, 38, 38, 0.3);
+  --severity-medium-bg: rgba(217, 119, 6, 0.15);
+  --severity-medium-border: rgba(217, 119, 6, 0.3);
+  --severity-low-bg: rgba(37, 99, 235, 0.15);
+  --severity-low-border: rgba(37, 99, 235, 0.3);
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.3);
+  --shadow-md: 0 4px 6px -1px rgba(0,0,0,0.4), 0 2px 4px rgba(0,0,0,0.3);
+  --shadow-lg: 0 10px 15px -3px rgba(0,0,0,0.5), 0 4px 6px rgba(0,0,0,0.3);
+}
+[data-theme="dark"] code { background: #334155; border-color: #475569; color: #e2e8f0; }
+[data-theme="dark"] pre { background: #0a0f1a; border-color: #1e293b; }
+[data-theme="dark"] blockquote { background: rgba(99, 102, 241, 0.08); border-left-color: var(--color-accent); }
+[data-theme="dark"] table th { background: #1e293b; }
+[data-theme="dark"] table td { background: var(--color-surface); }
+[data-theme="dark"] table tr:hover td { background: rgba(255,255,255,0.04); }
+[data-theme="dark"] tbody tr:hover td { background: #283548; }
+[data-theme="dark"] details.finding-card summary:hover { background: #283548; }
+[data-theme="dark"] details.finding-card[open] summary { background: #1e293b; border-bottom-color: var(--color-border); }
+[data-theme="dark"] details:not(.finding-card) summary:hover { background: #283548; }
+[data-theme="dark"] .sidebar-actions button:hover { background: #283548; color: var(--color-text); }
+[data-theme="dark"] .sidebar-nav a:hover { background: #283548; }
+[data-theme="dark"] .filter-btn:hover { background: #283548; }
+[data-theme="dark"] .finding-block-title { background: #1e293b; }
+[data-theme="dark"] .filter-search { background: var(--color-surface); color: var(--color-text); border-color: var(--color-border); }
+[data-theme="dark"] .filter-search:focus { box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2); }
+[data-theme="dark"] .hero-card { border-color: var(--color-border); }
+[data-theme="dark"] .hero-stats .stat-card { border-color: var(--color-border); }
+[data-theme="dark"] .effort-quick { background: rgba(5, 150, 105, 0.12); color: #34d399; border-color: rgba(5, 150, 105, 0.3); }
+[data-theme="dark"] .effort-strategic { background: rgba(37, 99, 235, 0.12); color: #60a5fa; border-color: rgba(37, 99, 235, 0.3); }
+[data-theme="dark"] .config-summary { color: var(--color-muted); }
+
+/* ── Print ── */
+@media print {
+  .sidebar, .back-to-top, .filter-bar, .sidebar-actions, .theme-toggle { display: none !important; }
+  .report-main { margin-left: 0 !important; padding: 0 !important; }
+  body { background: #fff; font-size: 12px; color: #1e293b; }
+  .report-layout { display: block; }
+  details { break-inside: avoid; }
+  details[open] summary { break-after: avoid; }
+  table { break-inside: avoid; }
+  h2, h3 { break-after: avoid; }
+  .finding-block { break-inside: avoid; }
+  a { color: inherit !important; }
+  pre { white-space: pre-wrap; word-break: break-all; }
+  .grade-card { box-shadow: none; border: 2px solid #e2e8f0; }
+  .section-card { box-shadow: none; border: 1px solid #e2e8f0; background: #fff; }
+}
+
+/* ── Responsive ── */
+@media (max-width: 768px) {
+  .sidebar { display: none; }
+  .report-main { margin-left: 0; padding: var(--space-4); }
+  .stat-grid { grid-template-columns: repeat(2, 1fr); }
+  .filter-bar { flex-direction: column; align-items: stretch; }
+  .filter-search { margin-left: 0; min-width: auto; }
+  .section-card { padding: var(--space-4); }
+  .hero-stats { grid-template-columns: repeat(2, 1fr); }
+  .report-meta { gap: var(--space-1) var(--space-3); }
+}
   `;
+
+  /* ── Minimal vanilla JS for interactivity ──────────────────────── */
+  const js = `(function(){
+  'use strict';
+  // ── Build sidebar nav from h2 headings ──
+  var main=document.getElementById('report-main');
+  var nav=document.querySelector('.sidebar-nav');
+  if(!main||!nav) return;
+  var headings=main.querySelectorAll('h2');
+  var sections=[];
+  headings.forEach(function(h,i){
+    var raw=h.textContent||'';
+    // strip leading emoji/symbol characters
+    var text=raw.replace(/^[\\s\\u2600-\\u27BF\\uD83C-\\uDBFF\\uDC00-\\uDFFF\\uFE00-\\uFE0F]+/u,'').trim();
+    if(!text) text=raw.trim();
+    var id='section-'+i;
+    h.id=id;
+    sections.push({id:id,el:h});
+    var li=document.createElement('li');
+    var a=document.createElement('a');
+    a.href='#'+id;
+    a.textContent=text;
+    a.dataset.section=id;
+    li.appendChild(a);
+    nav.appendChild(li);
+  });
+
+  // ── Scroll-spy ──
+  var activeId=null;
+  function spy(){
+    var y=window.scrollY+100;
+    var cur=null;
+    for(var i=sections.length-1;i>=0;i--){
+      if(sections[i].el.offsetTop<=y){cur=sections[i].id;break;}
+    }
+    if(cur===activeId) return;
+    if(activeId){var p=nav.querySelector('a[data-section=\"'+activeId+'\"]');if(p)p.classList.remove('active');}
+    if(cur){var n=nav.querySelector('a[data-section=\"'+cur+'\"]');if(n)n.classList.add('active');}
+    activeId=cur;
+  }
+  window.addEventListener('scroll',spy,{passive:true});
+  spy();
+
+  // ── Wrap section content in cards ──
+  for(var s=0;s<sections.length;s++){
+    var hEl=sections[s].el;
+    var card=document.createElement('div');
+    card.className='section-card';
+    var nextH=sections[s+1]?sections[s+1].el:null;
+    if(hEl.nextSibling){hEl.parentNode.insertBefore(card,hEl.nextSibling);}
+    else{hEl.parentNode.appendChild(card);}
+    while(card.nextSibling){
+      var nx=card.nextSibling;
+      if(nx===nextH)break;
+      if(nx.nodeType===1&&nx.tagName==='HR'){nx.parentNode.removeChild(nx);continue;}
+      card.appendChild(nx);
+    }
+  }
+
+  // ── Back to top ──
+  var btt=document.getElementById('back-to-top');
+  if(btt){
+    window.addEventListener('scroll',function(){btt.classList.toggle('visible',window.scrollY>300);},{passive:true});
+    btt.addEventListener('click',function(){window.scrollTo({top:0,behavior:'smooth'});});
+  }
+
+  // ── Expand / Collapse all ──
+  var expBtn=document.getElementById('btn-expand-all');
+  if(expBtn){
+    var open=false;
+    expBtn.addEventListener('click',function(){
+      open=!open;
+      document.querySelectorAll('details.finding-card').forEach(function(d){d.open=open;});
+      expBtn.textContent=open?'\\u229F Collapse all':'\\u229E Expand all';
+    });
+  }
+
+  // ── Theme toggle ──
+  var themeBtn=document.getElementById('theme-toggle');
+  if(themeBtn){
+    var html=document.documentElement;
+    themeBtn.addEventListener('click',function(){
+      var isDark=html.dataset.theme==='dark';
+      html.dataset.theme=isDark?'light':'dark';
+      localStorage.setItem('scantrix-theme',html.dataset.theme);
+    });
+  }
+
+  // ── Severity filter + search ──
+  var filterBtns=document.querySelectorAll('.filter-btn[data-severity]');
+  var searchBox=document.getElementById('finding-search');
+  var activeSev='all';
+  function applyFilters(){
+    var term=searchBox?searchBox.value.toLowerCase():'';
+    var cards=document.querySelectorAll('details.finding-card');
+    cards.forEach(function(f){
+      var sev=f.dataset.severity||'';
+      var txt=(f.querySelector('summary')||{}).textContent||'';
+      var sevOk=activeSev==='all'||sev===activeSev;
+      var txtOk=!term||txt.toLowerCase().indexOf(term)!==-1;
+      f.classList.toggle('hidden',!(sevOk&&txtOk));
+    });
+    // also hide/show severity group headings if all children hidden
+    document.querySelectorAll('h3').forEach(function(h){
+      var next=h.nextElementSibling;
+      if(!next||!next.classList.contains('finding-card')) return;
+      var anyVisible=false;
+      var el=h.nextElementSibling;
+      while(el&&el.tagName==='DETAILS'){
+        if(!el.classList.contains('hidden')) anyVisible=true;
+        el=el.nextElementSibling;
+      }
+      h.classList.toggle('hidden',!anyVisible);
+    });
+    var vc=0;
+    cards.forEach(function(c){if(!c.classList.contains('hidden'))vc++;});
+    var fc=document.getElementById('filter-count');
+    if(fc){
+      if(activeSev==='all'&&!term) fc.textContent='';
+      else fc.textContent='Showing '+vc+' of '+cards.length+' findings';
+    }
+  }
+  filterBtns.forEach(function(b){
+    b.addEventListener('click',function(){
+      activeSev=b.dataset.severity;
+      filterBtns.forEach(function(x){x.classList.toggle('active',x===b);});
+      applyFilters();
+    });
+  });
+  if(searchBox) searchBox.addEventListener('input',applyFilters);
+})();`;
 
   return `<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>${title}</title>
-  <style>
-${baseCss}
-  </style>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${title}</title>
+<style>${css}</style>
+<script>(function(){var t=localStorage.getItem('scantrix-theme');if(t){document.documentElement.dataset.theme=t;}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.dataset.theme='dark';}})();</script>
 </head>
 <body>
-<main>
+<div class="report-layout">
+  <nav class="sidebar" aria-label="Report navigation">
+    <div class="sidebar-brand">${opts.sidebarLogoSvg ? `<span class="brand-logo">${opts.sidebarLogoSvg}</span>` : '<span class="brand-text">Scantrix</span>'}</div>
+    <div class="sidebar-label">Sections</div>
+    <ul class="sidebar-nav" role="list"></ul>
+    <div class="sidebar-actions">
+      <div class="theme-toggle">
+        <button id="theme-toggle" class="theme-toggle-track" type="button" aria-label="Toggle theme"></button>
+        <span class="theme-toggle-label">Dark mode</span>
+      </div>
+      <button id="btn-expand-all" type="button">&#x229E; Expand all</button>
+      <button onclick="window.print()" type="button">&#128424; Print report</button>
+    </div>
+  </nav>
+  <main id="report-main" class="report-main">
+    <div class="report-content">
 ${bodyHtml}
-</main>
+    </div>
+  </main>
+</div>
+<button id="back-to-top" class="back-to-top" aria-label="Back to top" title="Back to top">&uarr;</button>
+<script>${js}</script>
 </body>
 </html>`;
+}
+
+/* ── Email‐friendly HTML wrapper (no sidebar / JS) ───────────────── */
+function wrapEmailDocument(title: string, bodyHtml: string): string {
+  const emailCss = `
+:root {
+  --text: #1a1f36; --muted: #6b7280; --border: #e2e4e8;
+  --header: #111827; --accent: #4c79f6;
+}
+body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  color: var(--text); line-height: 1.5; margin: 0; padding: 0;
+  background: #ffffff; font-size: 14px;
+}
+main { max-width: 720px; margin: 0 auto; padding: 16px; }
+h1,h2,h3,h4 { line-height: 1.3; }
+h1 { font-size: 1.5em; color: var(--header); }
+h2 { font-size: 1.25em; border-bottom: 1px solid var(--border); padding-bottom: 4px; }
+h3 { font-size: 1.05em; } h4 { font-size: 0.95em; }
+p { margin: 6px 0; } ul,ol { padding-left: 20px; } li { margin: 2px 0; }
+hr { border:0; border-top: 1px solid var(--border); margin: 16px 0; }
+a { color: var(--accent); text-decoration: none; }
+code { font-family: Menlo,Consolas,monospace; font-size: 0.9em; background: #f3f4f6; padding: 0 3px; border-radius: 3px; }
+pre { background: #f3f4f6; padding: 8px; border-radius: 4px; overflow-x: auto; font-size: 0.85em; }
+pre code { background: transparent; padding: 0; }
+table { width:100%; border-collapse: collapse; margin: 8px 0; font-size: 0.9em; }
+th,td { border: 1px solid var(--border); padding: 6px 8px; text-align: left; }
+th { background: #f9fafb; font-weight: 600; }
+blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #C7D2FE; background: #F3F4FF; border-radius: 4px; }
+.report-footer-logo { display: block; margin: 10px auto; max-width: 200px; }
+.report-footer-text { margin: 4px 0; color: var(--muted); font-size: 0.9em; text-align: center; }
+.finding-block { margin: 8px 0; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+.finding-block-title { padding: 6px 10px; font-weight: 600; background: #f9fafb; border-bottom: 1px solid var(--border); font-size: 0.9em; }
+.finding-block-body { padding: 8px 10px; font-size: 0.9em; }
+.badge { display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
+.badge-high { background: #fef2f2; color: #dc2626; } .badge-medium { background: #fffbeb; color: #d97706; } .badge-low { background: #eff6ff; color: #2563eb; }
+img { max-width: 100%; }
+  `;
+  return `<!doctype html>
+<html lang="en">
+<head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+<title>${title}</title><style>${emailCss}</style></head>
+<body><main>
+${bodyHtml}
+</main></body></html>`;
 }
 
 async function loadFooterLogoDataUri(): Promise<string | undefined> {
@@ -392,10 +888,27 @@ async function loadFooterLogoDataUri(): Promise<string | undefined> {
   }
 }
 
+async function loadSidebarLogoSvg(): Promise<string | undefined> {
+  // Try co-located src/assets first, then fall back to project root assets.
+  const candidates = [
+    path.join(__dirname, "assets", "scantrix-sidebar.svg"),
+    // path.join(process.cwd(), "src", "assets", "scantrix-sidebar.svg"),
+    path.join(process.cwd(), "src", "assets", "scantrix-logo.svg"),
+  ];
+  for (const p of candidates) {
+    try {
+      let svg = await fs.readFile(p, "utf-8");
+      // Strip XML declaration — not valid when inlined in HTML
+      svg = svg.replace(/<\?xml[^?]*\?>\s*/g, "").trim();
+      return svg;
+    } catch { /* try next */ }
+  }
+  return undefined;
+}
+
 /** Delegate to the shared scoring module — single source of truth for grade thresholds. */
-function calculateRiskScore(findings: ScanResults["findings"]): { grade: string; level: string; description: string } {
-  const { grade, level, description } = sharedCalculateRiskScore(findings);
-  return { grade, level, description };
+function calculateRiskScore(findings: ScanResults["findings"], inventory?: ScoreInventory) {
+  return sharedCalculateRiskScore(findings, inventory);
 }
 
 function getTopActionItems(findings: ScanResults["findings"]): string[] {
@@ -473,9 +986,9 @@ function getTopActionItems(findings: ScanResults["findings"]): string[] {
   return actions.slice(0, 3);
 }
 
-function getTopHotspotsAcrossFindings(findings: ScanResults["findings"]): Array<{file: string; issueCount: number; findingTypes: string[]}> {
+function getTopHotspotsAcrossFindings(findings: ScanResults["findings"]): Array<{file: string; issueCount: number; findingTypes: string[]; highCount: number; mediumCount: number; lowCount: number}> {
   // Aggregate all files across findings, weighted by severity
-  const fileStats = new Map<string, { count: number; findingIds: Set<string> }>();
+  const fileStats = new Map<string, { count: number; findingIds: Set<string>; highCount: number; mediumCount: number; lowCount: number }>();
 
   for (const f of findings) {
     // Skip CI findings (they're pipeline-level, not code hotspots)
@@ -490,9 +1003,12 @@ function getTopHotspotsAcrossFindings(findings: ScanResults["findings"]): Array<
       // Skip summary/meta evidence lines
       if (normalizedFile.includes("(CI summary)") || normalizedFile.includes("(correlation")) continue;
 
-      const existing = fileStats.get(normalizedFile) || { count: 0, findingIds: new Set<string>() };
+      const existing = fileStats.get(normalizedFile) || { count: 0, findingIds: new Set<string>(), highCount: 0, mediumCount: 0, lowCount: 0 };
       existing.count += weight;
       existing.findingIds.add(f.findingId);
+      if (f.severity === "high") existing.highCount++;
+      else if (f.severity === "medium") existing.mediumCount++;
+      else existing.lowCount++;
       fileStats.set(normalizedFile, existing);
     }
   }
@@ -503,9 +1019,33 @@ function getTopHotspotsAcrossFindings(findings: ScanResults["findings"]): Array<
       file,
       issueCount: stats.count,
       findingTypes: [...stats.findingIds],
+      highCount: stats.highCount,
+      mediumCount: stats.mediumCount,
+      lowCount: stats.lowCount,
     }))
     .sort((a, b) => b.issueCount - a.issueCount)
     .slice(0, 5);
+}
+
+function buildCategoryMatrix(findings: ScanResults["findings"]): Map<string, {high: number; medium: number; low: number}> {
+  const matrix = new Map<string, {high: number; medium: number; low: number}>();
+  for (const f of findings) {
+    const category = f.findingId.startsWith("PW-FLAKE") ? "Flakiness" :
+      f.findingId.startsWith("PW-STABILITY") ? "Stability" :
+      f.findingId.startsWith("PW-LOC") ? "Locators" :
+      f.findingId.startsWith("PW-PERF") ? "Performance" :
+      f.findingId.startsWith("PW-INSIGHT") ? "Insights" :
+      f.findingId.startsWith("CI-") ? "CI/CD" :
+      f.findingId.startsWith("ARCH-") ? "Architecture" :
+      f.findingId.startsWith("DEP-") ? "Dependencies" :
+      "Other";
+    const entry = matrix.get(category) || { high: 0, medium: 0, low: 0 };
+    if (f.severity === "high") entry.high++;
+    else if (f.severity === "medium") entry.medium++;
+    else entry.low++;
+    matrix.set(category, entry);
+  }
+  return matrix;
 }
 
 type QuickWinCategory = {
@@ -556,6 +1096,10 @@ function calculateRemediationTime(findings: ScanResults["findings"]): TimeEstima
     "PW-FLAKE-003": { min: 0.5, max: 1 },   // test.only/skip
     "PW-FLAKE-004": { min: 1, max: 3 },     // networkidle
     "PW-STABILITY-004": { min: 2, max: 6 }, // Tests without assertions
+    "PW-STABILITY-005": { min: 1, max: 2 }, // Browser resource leaks
+    "PW-STABILITY-006": { min: 0.5, max: 2 }, // Too many assertions
+    "SE-STABILITY-001": { min: 1, max: 2 }, // WebDriver resource leaks
+    "ARCH-010": { min: 1, max: 3 },         // Hardcoded inline test data
     "PW-LOC-002": { min: 1, max: 3 },       // Deep CSS nesting
     "PW-LOC-003": { min: 0.5, max: 2 },     // nth/first/last
     "PW-PERF-003": { min: 1, max: 3 },      // networkidle + high timeout
@@ -801,6 +1345,31 @@ function categorizeFindings(findings: ScanResults["findings"]): QuickWinCategory
           });
           break;
 
+        case "PW-STABILITY-005": // Browser resource leaks
+        case "SE-STABILITY-001": // WebDriver resource leaks
+          largerEfforts.push({
+            finding: `Add resource cleanup to ${fileCount} test file${fileCount > 1 ? 's' : ''}`,
+            effort: "1-2 hours",
+            impact: "Prevent memory leaks + zombie processes",
+          });
+          break;
+
+        case "PW-STABILITY-006": // Too many assertions per test
+          quickWins.push({
+            finding: `Split ${occurrences} over-asserted test${occurrences > 1 ? 's' : ''}`,
+            effort: "1-2 hours",
+            impact: "Clearer test failures",
+          });
+          break;
+
+        case "ARCH-010": // Hardcoded inline test data
+          quickWins.push({
+            finding: `Extract inline test data from ${fileCount} file${fileCount > 1 ? 's' : ''} to fixtures`,
+            effort: "1-2 hours",
+            impact: "Easier data maintenance",
+          });
+          break;
+
       case "DEP-001": // Outdated dependencies
         if (occurrences <= 3) {
           quickWins.push({
@@ -846,148 +1415,75 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   await fs.mkdir(outDir, { recursive: true });
 
   const footerLogoDataUri = await loadFooterLogoDataUri();
+  const sidebarLogoSvg = await loadSidebarLogoSvg();
 
   const findingsSorted = [...results.findings].sort(
     (a, b) => severityScore(b.severity) - severityScore(a.severity)
   );
 
-  const risk = calculateRiskScore(findingsSorted);
+  const risk = calculateRiskScore(findingsSorted, {
+    testFiles: results.inventory.testFiles,
+    cypressTestFiles: results.inventory.cypressTestFiles,
+    seleniumTestFiles: results.inventory.seleniumTestFiles,
+  });
   const topActions = getTopActionItems(findingsSorted);
 
   const md: string[] = [];
-
-  // Professional Header
-  md.push(`<div align="center">`);
-  md.push(``);
-  md.push(`# Playwright Framework Audit Report`);
-  md.push(``);
-  md.push(`**Automation Quality & Reliability Assessment**`);
-  md.push(``);
-  md.push(`</div>`);
-  md.push(``);
-  md.push(`---`);
-  md.push(``);
-
-  // Report metadata
-  md.push(`| | |`);
-  md.push(`|---|---|`);
-  md.push(`| **Repository** | \`${results.repoPath.split(/[/\\]/).pop()}\` |`);
-  md.push(`| **Branch** | \`${results.gitBranch ?? 'unknown'}\` |`);
-  md.push(`| **Audit Type** | Deep Audit |`);
-  md.push(`| **Generated** | ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })} |`);
-  md.push(`| **Playwright Version** | ${results.inventory.playwrightVersion ?? 'Unknown'} |`);
-  md.push(`| **Total Files Scanned** | ${results.inventory.totalFiles} |`);
-  md.push(``);
-
-  // Table of Contents
-  md.push(`##  TABLE OF CONTENTS`);
-  md.push(``);
-  md.push(`1. [Executive Summary](#-executive-summary)`);
-  md.push(`2. [Findings Inventory](#-findings-inventory)`);
-  md.push(`3. [Risk Assessment](#-risk-assessment)`);
-  md.push(`4. [Recommended Actions](#-recommended-actions)`);
-  md.push(`5. [Configuration Overview](#-configuration-overview)`);
-  md.push(`6. [Detailed Findings](#-detailed-findings)`);
-  md.push(`7. [Appendix](#-appendix)`);
-  md.push(``);
-  md.push(`---`);
-  md.push(``);
-
-  // Executive Summary
-  md.push(`##  EXECUTIVE SUMMARY`);
-  md.push(``);
 
   const highCount = findingsSorted.filter(f => f.severity === "high").length;
   const mediumCount = findingsSorted.filter(f => f.severity === "medium").length;
   const lowCount = findingsSorted.filter(f => f.severity === "low").length;
   const totalFindings = highCount + mediumCount + lowCount;
 
-  // Overall Score with Letter Grade
-  md.push(`### Overall Score`);
+  // Professional Header
+  md.push(`<div align="center">`);
   md.push(``);
-  md.push(`| Grade | Level | Assessment |`);
-  md.push(`|:-----:|-------|------------|`);
-  md.push(`| **${risk.grade}** | ${risk.level} | ${risk.description} |`);
+  md.push(`# Automation Framework Audit Report`);
   md.push(``);
-  md.push(`> *Score is a heuristic based on severity-weighted findings and hotspot concentration.*`);
+  md.push(`**Findings, Risks, and Recommendations**`);
   md.push(``);
-  md.push(`| Metric | Value |`);
-  md.push(`|--------|-------|`);
-  md.push(`| **Total Findings** | ${totalFindings} |`);
+  md.push(`</div>`);
   md.push(``);
 
-  // Findings breakdown
-  md.push(`### Findings Breakdown`);
-  md.push(``);
-  md.push(`| Severity | Count | Description |`);
-  md.push(`|----------|-------|-------------|`);
-  md.push(`| 🔴 **High** | ${highCount} | Critical issues requiring immediate attention |`);
-  md.push(`| 🟠 **Medium** | ${mediumCount} | Important issues to address in next sprint |`);
-  md.push(`| 🟡 **Low** | ${lowCount} | Minor improvements for long-term quality |`);
-  md.push(``);
-
-  md.push(`---`);
+  // Compact metadata bar
+  md.push(`<div class="report-meta">`);
+  md.push(`<span class="meta-item"><strong>Repository:</strong> <code>${results.repoPath.split(/[/\\]/).pop()}</code></span>`);
+  md.push(`<span class="meta-item"><strong>Branch:</strong> <code>${results.gitBranch ?? 'unknown'}</code></span>`);
+  md.push(`<span class="meta-item"><strong>Generated:</strong> ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</span>`);
+  md.push(`<span class="meta-item"><strong>Playwright:</strong> ${results.inventory.playwrightVersion ?? 'Unknown'}</span>`);
+  md.push(`<span class="meta-item"><strong>Files scanned:</strong> ${results.inventory.totalFiles}</span>`);
+  md.push(`</div>`);
   md.push(``);
 
-  // Findings Inventory
-  md.push(`##  FINDINGS SUMMARY`);
-  md.push(``);
-  
-  if (findingsSorted.length > 0) {
-    md.push(`> *Quick reference table of all detected findings with their severity and scope.*`);
-    md.push(``);
-    md.push(`| ID | Title | Severity | Category | Files Affected |`);
-    md.push(`|----|----|----------|----------|----------------|`);
-    
-    for (const f of findingsSorted) {
-      const affectedFiles = new Set(f.evidence.map(e => e.file)).size;
-      const category = f.findingId.startsWith("PW-FLAKE") ? "Flakiness" :
-              f.findingId.startsWith("PW-STABILITY") ? "Stability" :
-              f.findingId.startsWith("PW-LOC") ? "Locators" :
-              f.findingId.startsWith("PW-PERF") ? "Performance" :
-              f.findingId.startsWith("PW-INSIGHT") ? "Insights" :
-              f.findingId.startsWith("CI-") ? "CI/CD" :
-              f.findingId.startsWith("ARCH-") ? "Architecture" :
-              f.findingId.startsWith("DEP-") ? "Dependencies" :
-              "Other";
-      
-      const severityBadge = f.severity === "high" ? "🔴 High" :
-                           f.severity === "medium" ? "🟠 Medium" :
-                           "🟡 Low";
-      
-      md.push(`| \`${f.findingId}\` | ${f.title} | ${severityBadge} | ${category} | ${affectedFiles} |`);
-    }
-    md.push(``);
-  }
-
-  md.push(`---`);
+  // ── Section 1: EXECUTIVE SUMMARY ──
+  md.push(`## EXECUTIVE SUMMARY`);
   md.push(``);
 
-  // Risk Assessment
-  md.push(`##  RISK ASSESSMENT`);
+  const gradeLetter = risk.grade.toUpperCase();
+  const gradeClass = `grade-${gradeLetter.toLowerCase()}`;
+  md.push(`<div class="hero-card">`);
+  md.push(`<div class="hero-grade">`);
+  md.push(`<div class="grade-letter ${gradeClass}">${gradeLetter}</div>`);
+  md.push(`<div class="grade-detail">`);
+  md.push(`<div class="grade-level">${risk.level} (${risk.riskScore}/100)</div>`);
+  md.push(`<div class="grade-desc">${risk.description}</div>`);
+  md.push(`</div>`);
+  md.push(`</div>`);
+  md.push(`<div class="hero-stats">`);
+  md.push(`<div class="stat-card"><div class="stat-label">Total Findings</div><div class="stat-value">${totalFindings}</div></div>`);
+  md.push(`<div class="stat-card stat-card-high"><div class="stat-label">High</div><div class="stat-value stat-high">${highCount}</div></div>`);
+  md.push(`<div class="stat-card stat-card-medium"><div class="stat-label">Medium</div><div class="stat-value stat-medium">${mediumCount}</div></div>`);
+  md.push(`<div class="stat-card stat-card-low"><div class="stat-label">Low</div><div class="stat-value stat-low">${lowCount}</div></div>`);
+  md.push(`</div>`);
+  const densityNote = risk.densityInfo
+    ? ` Density-adjusted for ${risk.densityInfo.effectiveTestFiles} test files (${risk.densityInfo.densityFactor}× scale factor, ${risk.densityInfo.findingDensity} findings/file).`
+    : "";
+  md.push(`<div class="hero-footnote">Health score out of 100 — higher is better.${densityNote}</div>`);
+  md.push(`</div>`);
   md.push(``);
 
-  // Top Hotspots section
-  const topHotspots = getTopHotspotsAcrossFindings(findingsSorted);
-  if (topHotspots.length > 0) {
-    md.push(`### Priority Files`);
-    md.push(`> *These files have the highest concentration of issues and should be addressed first.*`);
-    md.push(``);
-    md.push(`| File | Issues Found |`);
-    md.push(`|------|--------------|`);
-    for (const hotspot of topHotspots) {
-      const fileName = hotspot.file.split('/').pop() || hotspot.file;
-      const issueLabels = hotspot.findingTypes.map(t => `\`${t}\``).join(' ');
-      md.push(`| \`${fileName}\` | ${issueLabels} |`);
-    }
-    md.push(``);
-  }
-
-  md.push(`---`);
-  md.push(``);
-
-  // Recommended Actions
-  md.push(`##  RECOMMENDED ACTIONS`);
+  // ── Section 2: RECOMMENDED ACTIONS (moved up) ──
+  md.push(`## RECOMMENDED ACTIONS`);
   md.push(``);
 
   if (topActions.length > 0) {
@@ -999,36 +1495,24 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     });
   }
 
-  // Quick Wins vs Larger Efforts
+  // Consolidated effort table
   const { quickWins, largerEfforts } = categorizeFindings(findingsSorted);
   if (quickWins.length > 0 || largerEfforts.length > 0) {
     md.push(`### Effort Estimation`);
     md.push(``);
-
-    if (quickWins.length > 0) {
-      md.push(`####  Quick Wins *(< 2 hours each)*`);
-      md.push(``);
-      md.push(`| Action Item | Time Estimate | Expected Impact |`);
-      md.push(`|-------------|---------------|-----------------|`);
-      for (const qw of quickWins) {
-        md.push(`| ${qw.finding} | ${qw.effort} | ${qw.impact} |`);
-      }
-      md.push(``);
+    md.push(`| Action Item | Effort | Time Estimate | Expected Impact |`);
+    md.push(`|-------------|--------|---------------|-----------------|`);
+    for (const qw of quickWins) {
+      md.push(`| ${qw.finding} | <span class="badge effort-quick">Quick Win</span> | ${qw.effort} | ${qw.impact} |`);
     }
-
-    if (largerEfforts.length > 0) {
-      md.push(`####  Strategic Improvements *(half-day to multi-day)*`);
-      md.push(``);
-      md.push(`| Action Item | Time Estimate | Expected Impact |`);
-      md.push(`|-------------|---------------|-----------------|`);
-      for (const le of largerEfforts) {
-        md.push(`| ${le.finding} | ${le.effort} | ${le.impact} |`);
-      }
-      md.push(``);
+    for (const le of largerEfforts) {
+      md.push(`| ${le.finding} | <span class="badge effort-strategic">Strategic</span> | ${le.effort} | ${le.impact} |`);
     }
+    md.push(``);
+
     // Time Summary
     const timeEstimate = calculateRemediationTime(findingsSorted);
-    md.push(`####  Remediation Time Summary`);
+    md.push(`#### Remediation Time Summary`);
     md.push(``);
     md.push(`| Target | Estimated Time | Scope |`);
     md.push(`|--------|----------------|-------|`);
@@ -1038,13 +1522,105 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     md.push(`| **Address All Issues** | ${formatTimeRange(timeEstimate.toAllResolved.minHours, timeEstimate.toAllResolved.maxHours)} | Resolve all ${timeEstimate.totalIssueCount} finding${timeEstimate.totalIssueCount !== 1 ? 's' : ''} |`);
     md.push(``);
     md.push(`> *Time estimates assume a single engineer familiar with the codebase. Actual time may vary based on complexity and team experience.*`);
-    md.push(``);  }
+    md.push(``);
+  }
 
-  md.push(`---`);
+  // ── Section 3: RISK ASSESSMENT ──
+  md.push(`## RISK ASSESSMENT`);
   md.push(``);
 
-  // Configuration Overview
-  md.push(`##  CONFIGURATION OVERVIEW`);
+  const topHotspots = getTopHotspotsAcrossFindings(findingsSorted);
+  if (topHotspots.length > 0) {
+    md.push(`### Priority Files`);
+    md.push(`> *These files have the highest concentration of issues and should be addressed first.*`);
+    md.push(``);
+    md.push(`| File | Issues Found |`);
+    md.push(`|------|--------------|`);
+    for (const hotspot of topHotspots) {
+      const fileName = hotspot.file.split('/').pop() || hotspot.file;
+      const badges: string[] = [];
+      if (hotspot.highCount > 0) badges.push(`<span class="badge badge-high">${hotspot.highCount}</span>`);
+      if (hotspot.mediumCount > 0) badges.push(`<span class="badge badge-medium">${hotspot.mediumCount}</span>`);
+      if (hotspot.lowCount > 0) badges.push(`<span class="badge badge-low">${hotspot.lowCount}</span>`);
+      md.push(`| \`${fileName}\` | ${badges.join(' ')} |`);
+    }
+    md.push(``);
+  }
+
+  // ── Section 4: FINDINGS OVERVIEW (severity×category matrix) ──
+  md.push(`## FINDINGS OVERVIEW`);
+  md.push(``);
+
+  if (findingsSorted.length > 0) {
+    const categoryMatrix = buildCategoryMatrix(findingsSorted);
+    md.push(`<div class="severity-matrix">`);
+    md.push(``);
+    md.push(`| Category | High | Medium | Low | Total |`);
+    md.push(`|----------|------|--------|-----|-------|`);
+    for (const [cat, counts] of categoryMatrix) {
+      const total = counts.high + counts.medium + counts.low;
+      const hCell = counts.high > 0 ? `<span class="badge badge-high">${counts.high}</span>` : '\u2014';
+      const mCell = counts.medium > 0 ? `<span class="badge badge-medium">${counts.medium}</span>` : '\u2014';
+      const lCell = counts.low > 0 ? `<span class="badge badge-low">${counts.low}</span>` : '\u2014';
+      md.push(`| ${cat} | ${hCell} | ${mCell} | ${lCell} | ${total} |`);
+    }
+    md.push(``);
+    md.push(`</div>`);
+    md.push(``);
+  }
+
+  // ── Section 5: DETAILED FINDINGS ──
+  md.push(`## DETAILED FINDINGS`);
+  md.push(``);
+
+  if (!findingsSorted.length) {
+    md.push(`> **Excellent!** No issues were detected by the current audit rules.`);
+    md.push(``);
+  } else {
+    // Filter bar
+    md.push(`<div class="filter-bar" role="toolbar" aria-label="Filter findings">`);
+    md.push(`<label>Filter:</label>`);
+    md.push(`<button class="filter-btn active" data-severity="all" type="button">All (${totalFindings})</button>`);
+    if (highCount > 0) md.push(`<button class="filter-btn" data-severity="high" type="button">High (${highCount})</button>`);
+    if (mediumCount > 0) md.push(`<button class="filter-btn" data-severity="medium" type="button">Medium (${mediumCount})</button>`);
+    if (lowCount > 0) md.push(`<button class="filter-btn" data-severity="low" type="button">Low (${lowCount})</button>`);
+    md.push(`<input type="search" class="filter-search" id="finding-search" placeholder="Search findings..." aria-label="Search findings"/>`);
+    md.push(`</div>`);
+    md.push(`<div class="filter-count" id="filter-count"></div>`);
+    md.push(``);
+
+    // Group findings by severity
+    const highFindings = findingsSorted.filter(f => f.severity === "high");
+    const mediumFindings = findingsSorted.filter(f => f.severity === "medium");
+    const lowFindings = findingsSorted.filter(f => f.severity === "low");
+
+    if (highFindings.length > 0) {
+      md.push(`### 🔴 High Severity Issues`);
+      md.push(``);
+      for (const f of highFindings) {
+        renderFinding(md, f);
+      }
+    }
+
+    if (mediumFindings.length > 0) {
+      md.push(`### 🟠 Medium Severity Issues`);
+      md.push(``);
+      for (const f of mediumFindings) {
+        renderFinding(md, f);
+      }
+    }
+
+    if (lowFindings.length > 0) {
+      md.push(`### 🔵 Low Severity Issues`);
+      md.push(``);
+      for (const f of lowFindings) {
+        renderFinding(md, f);
+      }
+    }
+  }
+
+  // ── Section 6: CONFIGURATION OVERVIEW ──
+  md.push(`## CONFIGURATION OVERVIEW`);
   md.push(``);
 
   // Playwright Config
@@ -1053,6 +1629,17 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   if (pw) {
     md.push(`### Playwright Configuration`);
     md.push(``);
+    // Config summary line
+    const pwSummaryParts: string[] = [];
+    if (pw.workers) pwSummaryParts.push(`Workers: ${pw.workers}`);
+    if (pw.retries) pwSummaryParts.push(`Retries: ${pw.retries}`);
+    if (pw.timeoutMs) pwSummaryParts.push(`Timeout: ${Math.round(pw.timeoutMs / 1000)}s`);
+    if (pw.use?.trace) pwSummaryParts.push(`Trace: ${pw.use.trace}`);
+    else pwSummaryParts.push(`Trace: off`);
+    if (pwSummaryParts.length > 0) {
+      md.push(`<p class="config-summary">${pwSummaryParts.join(' \u00b7 ')}</p>`);
+      md.push(``);
+    }
     if (allConfigs && allConfigs.length > 1) {
       md.push(`> **${allConfigs.length} config files detected** — showing details for the primary config. All configs listed below.`);
       md.push(``);
@@ -1106,6 +1693,16 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   if (ci) {
     md.push(`### CI/CD Configuration`);
     md.push(``);
+    // CI summary line
+    const ciPlatform = ci.detectedAzurePipelines ? 'Azure Pipelines' : ci.detectedGitHubActions ? 'GitHub Actions' : 'Unknown';
+    const ciSummaryParts = [
+      ciPlatform,
+      `${ci.files.length} pipeline${ci.files.length !== 1 ? 's' : ''}`,
+      ci.usesCache ? 'Caching enabled' : 'No caching',
+      ci.usesSharding ? 'Sharding enabled' : 'No sharding',
+    ];
+    md.push(`<p class="config-summary">${ciSummaryParts.join(' \u00b7 ')}</p>`);
+    md.push(``);
     md.push(`<details>`);
     md.push(`<summary>CI details</summary>`);
     md.push(``);
@@ -1135,52 +1732,8 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     md.push(``);
   }
 
-  md.push(`---`);
-  md.push(``);
-
-  // Detailed Findings
-  md.push(`##  DETAILED FINDINGS`);
-  md.push(``);
-
-  if (!findingsSorted.length) {
-    md.push(`>  **Excellent!** No issues were detected by the current audit rules.`);
-    md.push(``);
-  } else {
-    // Group findings by severity
-    const highFindings = findingsSorted.filter(f => f.severity === "high");
-    const mediumFindings = findingsSorted.filter(f => f.severity === "medium");
-    const lowFindings = findingsSorted.filter(f => f.severity === "low");
-
-    if (highFindings.length > 0) {
-      md.push(`### 🔴 High Severity Issues`);
-      md.push(``);
-      for (const f of highFindings) {
-        renderFinding(md, f);
-      }
-    }
-
-    if (mediumFindings.length > 0) {
-      md.push(`### 🟠 Medium Severity Issues`);
-      md.push(``);
-      for (const f of mediumFindings) {
-        renderFinding(md, f);
-      }
-    }
-
-    if (lowFindings.length > 0) {
-      md.push(`### 🟡 Low Severity Issues`);
-      md.push(``);
-      for (const f of lowFindings) {
-        renderFinding(md, f);
-      }
-    }
-  }
-
-  md.push(`---`);
-  md.push(``);
-
-  // Appendix
-  md.push(`##  Appendix`);
+  // ── Section 7: Appendix ──
+  md.push(`## Appendix`);
   md.push(``);
   md.push(`### Repository Statistics`);
   md.push(``);
@@ -1206,9 +1759,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`> *Grades are calculated using severity-weighted findings and evidence concentration.*`);
   md.push(``);
 
-  // Professional Footer
-  md.push(`---`);
-  md.push(``);
+  // Footer
   md.push(`<div align="center">`);
   md.push(``);
 
@@ -1218,6 +1769,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
   md.push(``);
   md.push(`<div class="report-footer-text"><b>Questions?</b> Contact QA Engineering team for remediation guidance.</div>`);
+   md.push(`<div class="report-footer-text"><b>https://www.scantrix.app</b></div>`);
   md.push(``);
   md.push(`</div>`);
 
@@ -1231,14 +1783,14 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
 
   const htmlBody = mdParser.render(markdownReport);
   const fullHtml = linkifyHttpUrlsInRenderedHtml(
-    wrapHtmlDocument("Playwright Framework Audit Report", htmlBody)
+    wrapHtmlDocument("Automation Framework Audit Report", htmlBody, "full", { sidebarLogoSvg })
   );
 
   const emailMarkdown = toEmailFriendlyMarkdown(markdownReport);
   const emailHtmlBody = mdParser.render(emailMarkdown);
   const emailHtml = linkifyHttpUrlsInRenderedHtml(
     wrapHtmlDocument(
-      "Playwright Framework Audit Report (Email)",
+      "Automation Framework Audit Report (Email)",
       emailHtmlBody,
       "email"
     )
@@ -1314,8 +1866,21 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
 }
 
 function renderFinding(md: string[], f: { findingId: string; severity: string; title: string; description: string; recommendation: string; evidence: Array<{ file: string; line: number; snippet: string }> }) {
-  md.push(`<details>`);
-  md.push(`<summary><strong>${f.findingId}</strong>: ${f.title}</summary>`);
+  const category = f.findingId.startsWith("PW-FLAKE") ? "flakiness" :
+    f.findingId.startsWith("PW-STABILITY") ? "stability" :
+    f.findingId.startsWith("PW-LOC") ? "locators" :
+    f.findingId.startsWith("PW-PERF") ? "performance" :
+    f.findingId.startsWith("PW-INSIGHT") ? "insights" :
+    f.findingId.startsWith("PW-DEPREC") ? "deprecated" :
+    f.findingId.startsWith("CI-") ? "ci" :
+    f.findingId.startsWith("ARCH-") ? "architecture" :
+    f.findingId.startsWith("DEP-") ? "dependencies" :
+    "other";
+  const badgeClass = f.severity === "high" ? "badge-high" : f.severity === "medium" ? "badge-medium" : "badge-low";
+  const badgeLabel = f.severity === "high" ? "High" : f.severity === "medium" ? "Medium" : "Low";
+
+  md.push(`<details class="finding-card" data-severity="${f.severity}" data-category="${category}" data-finding-id="${f.findingId}">`);
+  md.push(`<summary><span class="badge ${badgeClass}">${badgeLabel}</span> <strong>${f.findingId}</strong> &mdash; ${f.title}</summary>`);
   md.push(``);
   md.push(`> ${f.description}`);
   md.push(``);
@@ -1323,9 +1888,11 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
   md.push(`<div class="finding-block-title"><b>Recommendation</b></div>`);
   // Important: keep the body content as Markdown (not raw HTML) so markdown-it
   // can apply linkify/code spans and produce clickable links in the final HTML.
+  // formatRecommendation() converts \n-delimited text into proper Markdown with
+  // paragraph breaks and fenced code blocks for indented example lines.
   md.push(`<div class="finding-block-body">`);
   md.push(``);
-  md.push(f.recommendation);
+  md.push(formatRecommendation(f.recommendation));
   md.push(``);
   md.push(`</div>`);
   md.push(`</div>`);
@@ -1343,10 +1910,7 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
   const totalHits = uniqueEvidence.size;
   const affectedFiles = new Set([...uniqueEvidence.values()].map(e => e.file)).size;
 
-  md.push(`**Impact:** ${totalHits} occurrence${totalHits > 1 ? 's' : ''} across ${affectedFiles} file${affectedFiles > 1 ? 's' : ''}`);
-  md.push(``);
-
-  // Hotspots
+  // Merge top affected files inline into Impact line
   const fileHitCounts = new Map<string, number>();
   for (const e of uniqueEvidence.values()) {
     fileHitCounts.set(e.file, (fileHitCounts.get(e.file) ?? 0) + 1);
@@ -1355,20 +1919,16 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
+  let impactLine = `**Impact:** ${totalHits} occurrence${totalHits > 1 ? 's' : ''} across ${affectedFiles} file${affectedFiles > 1 ? 's' : ''}`;
   if (hotspots.length > 0 && !f.findingId.startsWith("CI-")) {
-    md.push(`<div class="finding-block">`);
-    md.push(`<div class="finding-block-title"><b>Top Affected Files</b></div>`);
-    md.push(`<div class="finding-block-body">`);
-    md.push(`<ul>`);
-    for (const [file, count] of hotspots) {
+    const fileList = hotspots.map(([file, count]) => {
       const fileName = file.split(/[/\\]/).pop() || file;
-      md.push(`<li><code>${escapeHtml(fileName)}</code> (${count} occurrence${count > 1 ? "s" : ""})</li>`);
-    }
-    md.push(`</ul>`);
-    md.push(`</div>`);
-    md.push(`</div>`);
-    md.push(``);
+      return `\`${fileName}\` (${count})`;
+    }).join(', ');
+    impactLine += ` \u2014 ${fileList}`;
   }
+  md.push(impactLine);
+  md.push(``);
 
   // Evidence samples (all)
   const evidenceList = Array.from(uniqueEvidence.values());

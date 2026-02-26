@@ -110,7 +110,7 @@ describe("buildScanResult", () => {
 
     expect(result.summary.total).toBe(0);
     expect(result.summary.high).toBe(0);
-    expect(result.summary.riskScore).toBe(0);
+    expect(result.summary.riskScore).toBe(100);
     expect(result.summary.riskGrade).toBe("A");
   });
 

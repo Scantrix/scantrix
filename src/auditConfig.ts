@@ -26,7 +26,7 @@ export type AuditConfig = {
 const DEFAULT_CONFIG: AuditConfig = {
   rules: { disabled: [], severityOverrides: {} },
   exclude: [],
-  thresholds: { gradeA: 20, gradeB: 50, gradeC: 85 },
+  thresholds: { gradeA: 80, gradeB: 50, gradeC: 30 },
 };
 
 export async function loadAuditConfig(
@@ -60,9 +60,9 @@ function mergeConfig(
     },
     exclude: overrides.exclude ?? defaults.exclude ?? [],
     thresholds: {
-      gradeA: overrides.thresholds?.gradeA ?? defaults.thresholds?.gradeA ?? 20,
+      gradeA: overrides.thresholds?.gradeA ?? defaults.thresholds?.gradeA ?? 80,
       gradeB: overrides.thresholds?.gradeB ?? defaults.thresholds?.gradeB ?? 50,
-      gradeC: overrides.thresholds?.gradeC ?? defaults.thresholds?.gradeC ?? 85,
+      gradeC: overrides.thresholds?.gradeC ?? defaults.thresholds?.gradeC ?? 30,
     },
   };
 }
@@ -95,15 +95,15 @@ export function generateDefaultConfig(): string {
       "coverage/**",
     ],
     "thresholds": {
-      "gradeA": 20,
+      "gradeA": 80,
       "gradeB": 50,
-      "gradeC": 85,
+      "gradeC": 30,
     },
     "_comments": {
       "disabled": "Add finding IDs to suppress entirely, e.g. [\"PW-LOC-001\", \"ARCH-006\"]",
       "severityOverrides": "Override severity for specific findings, e.g. { \"PW-FLAKE-001\": \"medium\" }",
       "exclude": "Glob patterns to exclude from file scanning",
-      "thresholds": "Risk score thresholds for letter grades. gradeA=max score for A, gradeB=max for B, gradeC=max for C, above C = D/F",
+      "thresholds": "Health score thresholds for letter grades (0-100, higher=better). gradeA=min score for A, gradeB=min for B, gradeC=min for C, below C = D/F",
     },
   };
   return JSON.stringify(config, null, 2) + "\n";

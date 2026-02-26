@@ -40,8 +40,8 @@ const gradeColor: Record<string, string> = {
 
 function TrendBadge({ dir }: { dir: string }) {
   const map: Record<string, { icon: React.ReactNode; label: string; variant: "success" | "high" | "outline" | "low" }> = {
-    improving: { icon: <ArrowDown className="h-3 w-3" />, label: "Improving", variant: "success" },
-    degrading: { icon: <ArrowUp className="h-3 w-3" />,   label: "Degrading", variant: "high" },
+    improving: { icon: <ArrowUp className="h-3 w-3" />,   label: "Improving", variant: "success" },
+    degrading: { icon: <ArrowDown className="h-3 w-3" />, label: "Degrading", variant: "high" },
     stable:    { icon: <ArrowRight className="h-3 w-3" />, label: "Stable",    variant: "outline" },
     new:       { icon: <Star className="h-3 w-3" />,       label: "New",       variant: "low" },
   };
@@ -56,9 +56,9 @@ function TrendBadge({ dir }: { dir: string }) {
 type SortField = "repo_name" | "findings_count" | "high_count" | "risk_score" | "risk_grade";
 
 function riskBarFill(score: number) {
-  if (score <= 20) return "hsl(160 84% 39%)";
-  if (score <= 50) return "hsl(224 90% 63%)";
-  if (score <= 85) return "hsl(45 93% 56%)";
+  if (score >= 80) return "hsl(160 84% 39%)";
+  if (score >= 50) return "hsl(224 90% 63%)";
+  if (score >= 30) return "hsl(45 93% 56%)";
   return "hsl(0 84% 60%)";
 }
 
@@ -93,7 +93,7 @@ export default function ComparePage() {
     return sortAsc ? cmp : -cmp;
   });
 
-  const bestRepo       = data.length > 0 ? [...data].sort((a, b) => a.risk_score - b.risk_score)[0] : null;
+  const bestRepo       = data.length > 0 ? [...data].sort((a, b) => b.risk_score - a.risk_score)[0] : null;
   const improvingCount = data.filter((d) => d.trend_direction === "improving").length;
   const degradingCount = data.filter((d) => d.trend_direction === "degrading").length;
 
@@ -131,7 +131,7 @@ export default function ComparePage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Improving</CardTitle>
-                <TrendingDown className="h-5 w-5 text-emerald-400" />
+                <TrendingUp className="h-5 w-5 text-emerald-400" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-emerald-400">{improvingCount}</div>
@@ -140,7 +140,7 @@ export default function ComparePage() {
             <Card>
               <CardHeader className="flex flex-row items-center justify-between pb-2">
                 <CardTitle className="text-sm font-medium text-muted-foreground">Degrading</CardTitle>
-                <TrendingUp className="h-5 w-5 text-red-400" />
+                <TrendingDown className="h-5 w-5 text-red-400" />
               </CardHeader>
               <CardContent>
                 <div className="text-3xl font-bold text-red-400">{degradingCount}</div>
@@ -176,7 +176,7 @@ export default function ComparePage() {
                       Grade{sortArrow("risk_grade")}
                     </TableHead>
                     <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("risk_score")}>
-                      Risk Score{sortArrow("risk_score")}
+                      Health Score{sortArrow("risk_score")}
                     </TableHead>
                     <TableHead className="cursor-pointer select-none text-right" onClick={() => handleSort("findings_count")}>
                       Findings{sortArrow("findings_count")}
@@ -222,7 +222,7 @@ export default function ComparePage() {
           {/* ── Risk score comparison bar chart ── */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Risk Score Comparison</CardTitle>
+              <CardTitle className="text-lg">Health Score Comparison</CardTitle>
             </CardHeader>
             <CardContent>
               <SafeChart height={Math.max(200, sorted.length * 48)}>
@@ -243,9 +243,9 @@ export default function ComparePage() {
                       border: "1px solid hsl(213 52% 24%)",
                       borderRadius: 8,
                     }}
-                    formatter={(value) => [`${value}`, "Risk Score"]}
+                    formatter={(value) => [`${value}`, "Health Score"]}
                   />
-                  <Bar dataKey="risk_score" name="Risk Score" radius={[0, 4, 4, 0]}>
+                  <Bar dataKey="risk_score" name="Health Score" radius={[0, 4, 4, 0]}>
                     {sorted.map((entry, i) => (
                       <Cell key={i} fill={riskBarFill(entry.risk_score)} />
                     ))}

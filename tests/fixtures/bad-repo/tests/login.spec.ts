@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+const username = 'testadmin';
+const firstName = 'Alice';
+const lastName = 'Johnson';
+const zipCode = '30301';
+
 test('login with hard wait', async ({ page }) => {
   await page.goto('https://staging.example.com/login');
   await page.waitForTimeout(5000);
@@ -58,4 +63,11 @@ test('layout selector usage', async ({ page }) => {
 test('visit home page', async ({ page }) => {
   await page.goto('https://staging.example.com');
   await page.waitForTimeout(1000);
+});
+
+// Debug pause left in committed code (PW-FLAKE-001)
+test('debug session leftover', async ({ page }) => {
+  await page.goto('https://staging.example.com/debug');
+  await page.pause();
+  await expect(page.locator('h1')).toBeVisible();
 });

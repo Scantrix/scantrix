@@ -31,9 +31,9 @@ describe("generateDefaultConfig", () => {
 
   it("includes default thresholds", () => {
     const config = JSON.parse(generateDefaultConfig());
-    expect(config.thresholds.gradeA).toBe(20);
+    expect(config.thresholds.gradeA).toBe(80);
     expect(config.thresholds.gradeB).toBe(50);
-    expect(config.thresholds.gradeC).toBe(85);
+    expect(config.thresholds.gradeC).toBe(30);
   });
 
   it("includes _comments documentation section", () => {
