@@ -1,5 +1,47 @@
 # Changelog
 
+## [5.2.2] - 2026-02-25
+
+### Density-Normalized Health Scoring
+
+- Health score now factors in test suite size via **density normalization**. The decay constant
+  (λ) is scaled by suite size: `λ = 80 × clamp(1.0 + 0.5 × log₂(testFiles / 50), 1.0, 3.5)`.
+  Larger suites get a more forgiving decay, so the same risk points yield a higher health score.
+- Suites with ≤ 50 test files see no change (neutral point). 100 files → 1.5× λ, 200 → 2.0×,
+  1,000 → 2.66×, 3,200+ → capped at 3.5×.
+- When no inventory data is available, scoring behavior is identical to the previous version.
+- Report hero card now shows density adjustment details in the footnote.
+- `ScanResult.summary` includes optional `densityAdjustment` metadata.
+- New test file: `tests/scoring.test.ts` with 19 unit tests covering all density scenarios.
+
+---
+
+## [5.2.1] - 2026-02-25
+
+### False Positive Reduction — Test Content Gate
+
+- **PW-FLAKE-001 / PW-FLAKE-002**: Added `testContentOnly` gate — files without test
+  framework DSL (`test()`, `it()`, `describe()`) or page object patterns are now skipped,
+  even when matched by directory globs like `**/fixtures/**`. Prevents false positives on
+  utility/infrastructure files (e.g., resource managers with legitimate `setTimeout`).
+- **PW-FLAKE-001**: Widened retry/backoff suppression window from ±1 to ±10 lines so that
+  `setTimeout` inside exponential backoff loops (where the `while` is several lines above)
+  is correctly suppressed.
+- **PW-STABILITY-005**: Now recognizes variable-based cleanup in `afterAll`/`afterEach` hooks
+  (e.g., `slPage?.close()`) in addition to literal cleanup (`page.close()`). Fixes false
+  positives when browser contexts/pages are assigned to variables and cleaned up by name.
+- **ARCH-011** (Low) — New rule: detects emoji/pictographic characters in `console.log`,
+  `console.warn`, `console.error`, `console.info`, and `console.debug` calls. Emoji can
+  render as garbled characters in CI logs or break log aggregator parsing. Weighted at 1.2x
+  via the existing ARCH multiplier in scoring.
+- **PW-FLAKE-001**: Now also detects `page.pause()` — a debug-only method that halts
+  execution and opens the Playwright Inspector. Must be removed before committing.
+- **PW-FLAKE-002**: Severity lowered from Medium to **Low**. Force-clicks have legitimate
+  uses (e.g., testing modal dismiss-on-outside-click). Scoring impact reduced from 2 to 1
+  base points via the existing `severityScore()` calculation.
+
+---
+
 ## [5.2.0] - 2026-02-24
 
 ### Scoring Redesign — Health Score (0–100, higher = better)

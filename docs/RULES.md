@@ -6,25 +6,29 @@ Complete catalog of all audit rules implemented in Scantrix v5.2.0.
 
 ## Flakiness Rules (PW-FLAKE-*)
 
-### PW-FLAKE-001 — Hard waits detected
+### PW-FLAKE-001 — Hard waits or debug pauses detected
 | Property | Value |
 |----------|-------|
 | Severity | **High** |
 | Category | Flakiness |
-| Patterns | `waitForTimeout`, `setTimeout`, promise-based sleep helpers |
+| Patterns | `waitForTimeout`, `setTimeout`, promise-based sleep helpers, `page.pause()` |
 | File Globs | `**/*.spec.*`, `**/*.test.*`, `**/POMs/**/*.ts`, `**/pages/**/*.ts`, `**/fixtures/**/*.ts` |
 
-Hard waits slow tests and hide timing bugs. Replace with explicit waits like `expect(locator).toBeVisible()` or `page.waitForResponse()`.
+Hard waits slow tests and hide timing bugs. `page.pause()` is a debug-only method that halts execution and opens the Playwright Inspector — it must be removed before committing.
+
+> **Test content gate:** Files without test framework DSL (no `test()`, `it()`, `describe()`, or page object patterns) are automatically excluded, even when matched by directory globs like `**/fixtures/**`.
 
 ### PW-FLAKE-002 — Force-click usage detected
 | Property | Value |
 |----------|-------|
-| Severity | **Medium** |
+| Severity | **Low** |
 | Category | Flakiness |
 | Patterns | `{ force: true }` |
 | Scope | Playwright-only |
 
-Force clicks bypass actionability checks, hiding real UI issues (overlapping elements, not-ready state).
+Force clicks bypass Playwright's actionability checks. While there are legitimate uses (e.g., clicking outside a modal to close it, testing dismiss-on-overlay-click), widespread usage may hide real UI issues.
+
+> **Test content gate:** Files without test framework DSL (no `test()`, `it()`, `describe()`, or page object patterns) are automatically excluded, even when matched by directory globs like `**/fixtures/**`.
 
 ### PW-FLAKE-003 — test.only / test.skip left in codebase
 | Property | Value |
@@ -118,6 +122,8 @@ Tests without assertions never fail and provide no signal. When retries are enab
 | Patterns | `chromium.launch()`, `browser.newContext()`, `browser.newPage()` without corresponding `.close()` |
 
 Manual browser/context/page creation without cleanup in afterEach/afterAll leaks resources. Use Playwright fixtures (({ page })) which auto-cleanup.
+
+> **Variable-based cleanup recognized:** When resources are assigned to variables (e.g., `slPage = await slContext.newPage()`) and those variables are closed in `afterAll`/`afterEach` hooks (e.g., `slPage?.close()`), the rule correctly suppresses the finding. Both literal cleanup (`page.close()`) and variable-based cleanup (`slPage?.close()`) are supported.
 
 ### PW-STABILITY-006 — Too many assertions per test
 | Property | Value |
@@ -376,6 +382,16 @@ Tests overriding `timeout` or `retries` inline. Use `test.use()` or project conf
 | Threshold | ≥3 matches per file, ≥2 files total |
 
 Inline test data (usernames, addresses, dates, prices) should be extracted to fixture files or generated with faker/data factories for easier maintenance and reuse.
+
+### ARCH-011 — Emoji characters in log messages
+| Property | Value |
+|----------|-------|
+| Severity | **Low** |
+| Category | Architecture |
+| Scope | Cross-framework |
+| Patterns | `console.log/warn/error/info/debug()` calls containing emoji (Unicode Extended_Pictographic) |
+
+Emoji in console output can render as garbled characters (mojibake) or cause parsing issues in CI log aggregators, SIEM tools, and plain-text report archivers. Replace with plain-text equivalents (e.g., `[PASS]`, `[FAIL]`, `[WARN]`).
 
 ---
 
@@ -772,13 +788,13 @@ Emitted when the target repository path passed to the scanner does not exist or 
 | Performance (PW-PERF) | 3 |
 | Deprecated API (PW-DEPREC) | 8 |
 | Dependencies (DEP) | 2 |
-| Architecture (ARCH) | 11 |
+| Architecture (ARCH) | 12 |
 | CI/CD (CI) | 14 |
 | Insights (PW-INSIGHT) | 15 |
 | Cypress (CY) | 7 |
 | Selenium (SE) | 4 |
 | System (SCAN) | 1 |
-| **Total** | **81** |
+| **Total** | **82** |
 
 ---
 
@@ -814,6 +830,28 @@ Each finding's evidence count is factored in using a log₂ scale, capped at 3.5
 ```
 evidenceMultiplier = min(1 + log₂(max(evidenceCount, 1)), 3.5)
 ```
+
+### Density normalization
+
+When inventory data is available, the decay constant (λ) is scaled by suite size so that larger test suites are evaluated more leniently. The rationale: 24 findings scattered across 981 test files is a healthier codebase than 18 findings concentrated in 105 test files.
+
+```
+effectiveTestFiles = testFiles + cypressTestFiles + seleniumTestFiles
+densityFactor      = clamp(1.0 + 0.5 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 3.5)
+adjustedLambda     = 80 × densityFactor
+healthScore        = round(100 × exp(-riskPoints / adjustedLambda))
+```
+
+| Suite size | densityFactor | Effective λ | Effect |
+|------------|--------------|-------------|--------|
+| ≤ 50 files | 1.0 | 80 | No adjustment (neutral) |
+| 100 files | 1.5 | 120 | Moderate relief |
+| 200 files | 2.0 | 160 | Significant relief |
+| 500 files | 2.16 | 173 | Strong relief |
+| 1,000 files | 2.66 | 213 | High relief |
+| 3,200+ files | 3.5 (cap) | 280 | Maximum relief |
+
+When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identical to pre-density behavior).
 
 ### Grade thresholds
 

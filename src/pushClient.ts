@@ -24,10 +24,18 @@ export async function pushFindings(options: PushOptions): Promise<void> {
 
   // Compute score & grade from the canonical scoring module so the dashboard
   // receives the exact same values as the CLI report.
-  const risk = calculateRiskScore(findings);
+  const inv = options.inventory;
+  const scoreInv = inv && typeof inv.testFiles === "number"
+    ? {
+        testFiles: inv.testFiles,
+        cypressTestFiles: typeof inv.cypressTestFiles === "number" ? inv.cypressTestFiles : undefined,
+        seleniumTestFiles: typeof inv.seleniumTestFiles === "number" ? inv.seleniumTestFiles : undefined,
+      }
+    : undefined;
+  const risk = calculateRiskScore(findings, scoreInv);
 
   const body = JSON.stringify({
-    repoName: repoName ?? inferRepoName(),
+    repoName: (repoName ?? inferRepoName()).toLowerCase(),
     findings,
     timestamp: new Date().toISOString(),
     findingsCount: findings.length,

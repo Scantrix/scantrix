@@ -28,14 +28,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
-  const { repoName, findings, timestamp, findingsCount, highCount, mediumCount, lowCount } = body;
+  const { repoName: rawRepoName, findings, timestamp, findingsCount, highCount, mediumCount, lowCount } = body;
 
-  if (!repoName || !Array.isArray(findings)) {
+  if (!rawRepoName || !Array.isArray(findings)) {
     return NextResponse.json(
       { error: "Missing required fields: repoName, findings" },
       { status: 400 },
     );
   }
+
+  // Normalize repo name to lowercase to prevent case-sensitive duplicates
+  const repoName = rawRepoName.trim().toLowerCase();
 
   try {
     const db = getDb();

@@ -5,8 +5,8 @@
 ### Flakiness Findings (PW-FLAKE-*)
 | ID | Title | Severity | Description |
 |---|---|---|---|
-| PW-FLAKE-001 | Hard waits detected | 🔴 HIGH | `waitForTimeout`, `setTimeout` usage |
-| PW-FLAKE-002 | Force-click usage | 🟠 MEDIUM | `force: true` in clicks |
+| PW-FLAKE-001 | Hard waits or debug pauses | 🔴 HIGH | `waitForTimeout`, `setTimeout`, `page.pause()` usage |
+| PW-FLAKE-002 | Force-click usage | 🟡 LOW | `force: true` in clicks (legitimate uses exist, e.g., modal dismiss) |
 | PW-FLAKE-003 | test.only / test.skip detected | 🔴 HIGH | Permanent `test.only()` or `test.skip()` definitions |
 | PW-FLAKE-004 | networkidle usage | 🔴 HIGH | `waitForLoadState('networkidle')` or `waitUntil: 'networkidle'` |
 | PW-FLAKE-005 | Non-retrying assertions | 🔴 HIGH | `expect(await locator.isVisible()).toBe(true)` instead of web-first assertions |
@@ -89,6 +89,7 @@
 | ARCH-008 | Large inline test data | 🟠 MEDIUM | Data blocks ≥50 lines inline in test files (≥2 files) |
 | ARCH-009 | Inline config overrides | 🟡 LOW | timeout/retries set inline in test() calls (≥3 occurrences) |
 | ARCH-010 | Hardcoded inline test data | 🟡 LOW | Variable-anchored inline data (usernames, addresses, dates, prices) in ≥2 files |
+| ARCH-011 | Emoji characters in log messages | 🟡 LOW | `console.log/warn/error/info/debug()` calls containing emoji/pictographic characters |
 
 ### Deprecated API Findings (PW-DEPREC-*)
 | ID | Title | Severity | Description |
@@ -204,8 +205,9 @@
 15. **ARCH-007** - Custom error types improve debugging
 16. **ARCH-009** - Inline config overrides should use test.use()
 17. **ARCH-010** - Hardcoded inline test data reduces maintainability
-18. **CI-005** (self-hosted) - Caching less critical if deps cached
-19. **CI-013** - Pipeline timeout guards prevent stuck runs
+18. **ARCH-011** - Emoji in logs can garble CI output and break log aggregators
+19. **CI-005** (self-hosted) - Caching less critical if deps cached
+20. **CI-013** - Pipeline timeout guards prevent stuck runs
 
 ## Common Remediation Patterns
 
@@ -1135,9 +1137,19 @@ Step 1: Accumulate risk points
     ARCH-*       = 1.2×   (architecture debt)
     all others   = 1.0×
 
-Step 2: Convert to health score
+Step 2: Density normalization (when inventory is available)
 
-  healthScore = round(100 × exp(-riskPoints / 80))
+  effectiveTestFiles = testFiles + cypressTestFiles + seleniumTestFiles
+  densityFactor      = clamp(1.0 + 0.5 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 3.5)
+  adjustedLambda     = 80 × densityFactor
+
+  Larger suites get a higher λ, so the same risk points yield a better score.
+  ≤50 files → no adjustment, 100 → 1.5×, 200 → 2.0×, 1000 → 2.66×, 3200+ → 3.5× (cap)
+  When no inventory is available: densityFactor = 1.0 (no change)
+
+Step 3: Convert to health score
+
+  healthScore = round(100 × exp(-riskPoints / adjustedLambda))
 ```
 
 ### Example Conversions

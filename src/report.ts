@@ -5,7 +5,7 @@ import type { ScanResults } from "./scanner";
 import type { PlaywrightConfigSummary } from "./configExtractor";
 import { toSarif } from "./sarifFormatter";
 import { loadBaseline, computeDiff, formatDiffMarkdown, type SnapshotMeta } from "./diffTracker";
-import { calculateRiskScore as sharedCalculateRiskScore } from "./scoring";
+import { calculateRiskScore as sharedCalculateRiskScore, type ScoreInventory } from "./scoring";
 
 function severityScore(sev: "low" | "medium" | "high") {
   return sev === "high" ? 3 : sev === "medium" ? 2 : 1;
@@ -81,6 +81,47 @@ function escapeHtml(input: string): string {
     .replace(/>/g, "&gt;")
     .replace(/\"/g, "&quot;")
     .replace(/'/g, "&#39;");
+}
+
+/**
+ * Transforms a recommendation string into proper Markdown so that
+ * markdown-it renders it with visible paragraph breaks and code blocks
+ * instead of collapsing everything into a single paragraph.
+ *
+ * - Consecutive indented lines (≥2 leading spaces) → fenced code block
+ * - Non-indented lines → separated by blank lines (paragraph breaks)
+ */
+function formatRecommendation(rec: string): string {
+  const lines = rec.split("\n");
+  if (lines.length <= 1) return rec;
+
+  const out: string[] = [];
+  let inCode = false;
+
+  for (const line of lines) {
+    const isIndented = /^\s{2,}/.test(line);
+
+    if (isIndented && !inCode) {
+      out.push("");
+      out.push("```");
+      out.push(line.trimStart());
+      inCode = true;
+    } else if (isIndented && inCode) {
+      out.push(line.trimStart());
+    } else if (!isIndented && inCode) {
+      out.push("```");
+      out.push("");
+      out.push(line);
+      inCode = false;
+    } else {
+      if (out.length > 0) out.push("");
+      out.push(line);
+    }
+  }
+
+  if (inCode) out.push("```");
+
+  return out.join("\n");
 }
 
 function toEmailFriendlyMarkdown(markdown: string): string {
@@ -866,9 +907,8 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
 }
 
 /** Delegate to the shared scoring module — single source of truth for grade thresholds. */
-function calculateRiskScore(findings: ScanResults["findings"]): { grade: string; level: string; description: string; riskScore: number } {
-  const { grade, level, description, riskScore } = sharedCalculateRiskScore(findings);
-  return { grade, level, description, riskScore };
+function calculateRiskScore(findings: ScanResults["findings"], inventory?: ScoreInventory) {
+  return sharedCalculateRiskScore(findings, inventory);
 }
 
 function getTopActionItems(findings: ScanResults["findings"]): string[] {
@@ -1381,7 +1421,11 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     (a, b) => severityScore(b.severity) - severityScore(a.severity)
   );
 
-  const risk = calculateRiskScore(findingsSorted);
+  const risk = calculateRiskScore(findingsSorted, {
+    testFiles: results.inventory.testFiles,
+    cypressTestFiles: results.inventory.cypressTestFiles,
+    seleniumTestFiles: results.inventory.seleniumTestFiles,
+  });
   const topActions = getTopActionItems(findingsSorted);
 
   const md: string[] = [];
@@ -1431,7 +1475,10 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`<div class="stat-card stat-card-medium"><div class="stat-label">Medium</div><div class="stat-value stat-medium">${mediumCount}</div></div>`);
   md.push(`<div class="stat-card stat-card-low"><div class="stat-label">Low</div><div class="stat-value stat-low">${lowCount}</div></div>`);
   md.push(`</div>`);
-  md.push(`<div class="hero-footnote">Health score out of 100 — higher is better.</div>`);
+  const densityNote = risk.densityInfo
+    ? ` Density-adjusted for ${risk.densityInfo.effectiveTestFiles} test files (${risk.densityInfo.densityFactor}× scale factor, ${risk.densityInfo.findingDensity} findings/file).`
+    : "";
+  md.push(`<div class="hero-footnote">Health score out of 100 — higher is better.${densityNote}</div>`);
   md.push(`</div>`);
   md.push(``);
 
@@ -1841,9 +1888,11 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
   md.push(`<div class="finding-block-title"><b>Recommendation</b></div>`);
   // Important: keep the body content as Markdown (not raw HTML) so markdown-it
   // can apply linkify/code spans and produce clickable links in the final HTML.
+  // formatRecommendation() converts \n-delimited text into proper Markdown with
+  // paragraph breaks and fenced code blocks for indented example lines.
   md.push(`<div class="finding-block-body">`);
   md.push(``);
-  md.push(f.recommendation);
+  md.push(formatRecommendation(f.recommendation));
   md.push(``);
   md.push(`</div>`);
   md.push(`</div>`);
