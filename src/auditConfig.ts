@@ -26,7 +26,7 @@ export type AuditConfig = {
 const DEFAULT_CONFIG: AuditConfig = {
   rules: { disabled: [], severityOverrides: {} },
   exclude: [],
-  thresholds: { gradeA: 80, gradeB: 50, gradeC: 30 },
+  thresholds: { gradeA: 80, gradeB: 60, gradeC: 40 },
 };
 
 export async function loadAuditConfig(
@@ -61,8 +61,8 @@ function mergeConfig(
     exclude: overrides.exclude ?? defaults.exclude ?? [],
     thresholds: {
       gradeA: overrides.thresholds?.gradeA ?? defaults.thresholds?.gradeA ?? 80,
-      gradeB: overrides.thresholds?.gradeB ?? defaults.thresholds?.gradeB ?? 50,
-      gradeC: overrides.thresholds?.gradeC ?? defaults.thresholds?.gradeC ?? 30,
+      gradeB: overrides.thresholds?.gradeB ?? defaults.thresholds?.gradeB ?? 60,
+      gradeC: overrides.thresholds?.gradeC ?? defaults.thresholds?.gradeC ?? 40,
     },
   };
 }
@@ -96,8 +96,8 @@ export function generateDefaultConfig(): string {
     ],
     "thresholds": {
       "gradeA": 80,
-      "gradeB": 50,
-      "gradeC": 30,
+      "gradeB": 60,
+      "gradeC": 40,
     },
     "_comments": {
       "disabled": "Add finding IDs to suppress entirely, e.g. [\"PW-LOC-001\", \"ARCH-006\"]",

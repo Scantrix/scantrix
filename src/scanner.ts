@@ -37,6 +37,8 @@ export type Inventory = {
   cypressConfigSummary?: CypressConfigSummary;
   cypressTestFiles?: number;
   seleniumTestFiles?: number;
+  /** Total individual test cases (test() + test.only() calls) across all Playwright test files. */
+  testCases?: number;
 };
 
 export type ScanResults = {
@@ -1873,6 +1875,9 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   const filteredTestFiles = testFiles.filter((f) => !isIgnored(f));
 
+  // Accumulate individual test case count across all Playwright test files
+  let totalTestCases = 0;
+
   // PW-STABILITY-001: Shared state / missing cleanup hooks
   // Categorize files by risk level
   const filesNoHooksAtAll: Array<{file: string; testCount: number; analysis: TestFileAnalysis}> = [];
@@ -1892,6 +1897,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     try {
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestFile(content);
+      totalTestCases += analysis.testCount;
 
       // STABILITY-003: Flag any beforeAll using the Playwright page fixture
       // This commonly causes shared browser state and flaky cascades.
@@ -1944,6 +1950,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       continue;
     }
   }
+
+  inventory.testCases = totalTestCases;
 
   // STABILITY-003 finding
   if (beforeAllUsesPage.length > 0) {

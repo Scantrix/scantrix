@@ -133,7 +133,7 @@ runs:
           // Grade calculation (mirrors scoring.ts health score logic)
           const riskPoints = high * 10 + medium * 4 + low * 1;
           const score = Math.round(100 * Math.exp(-riskPoints / 80));
-          const grade = score >= 80 ? 'A' : score >= 50 ? 'B' : score >= 30 ? 'C' : score >= 15 ? 'D' : 'F';
+          const grade = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : score >= 25 ? 'D' : 'F';
           const gradeEmoji = { A: '🟢', B: '🔵', C: '🟡', D: '🟠', F: '🔴' }[grade] || '⚪';
 
           let body = `## ${gradeEmoji} Scantrix Audit Report\n\n`;

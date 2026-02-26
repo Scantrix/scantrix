@@ -75,12 +75,12 @@ describe("gradeFromHealthScore", () => {
     expect(gradeFromHealthScore(100).grade).toBe("A");
     expect(gradeFromHealthScore(80).grade).toBe("A");
     expect(gradeFromHealthScore(79).grade).toBe("B");
-    expect(gradeFromHealthScore(50).grade).toBe("B");
-    expect(gradeFromHealthScore(49).grade).toBe("C");
-    expect(gradeFromHealthScore(30).grade).toBe("C");
-    expect(gradeFromHealthScore(29).grade).toBe("D");
-    expect(gradeFromHealthScore(15).grade).toBe("D");
-    expect(gradeFromHealthScore(14).grade).toBe("F");
+    expect(gradeFromHealthScore(60).grade).toBe("B");
+    expect(gradeFromHealthScore(59).grade).toBe("C");
+    expect(gradeFromHealthScore(40).grade).toBe("C");
+    expect(gradeFromHealthScore(39).grade).toBe("D");
+    expect(gradeFromHealthScore(25).grade).toBe("D");
+    expect(gradeFromHealthScore(24).grade).toBe("F");
     expect(gradeFromHealthScore(0).grade).toBe("F");
   });
 });

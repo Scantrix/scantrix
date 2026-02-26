@@ -154,6 +154,11 @@ describe("bad-repo", () => {
     expect(results.inventory.testFiles).toBe(6);
   });
 
+  it("counts individual test cases across files", () => {
+    expect(results.inventory.testCases).toBeDefined();
+    expect(results.inventory.testCases).toBe(23);
+  });
+
   it("detects Playwright config", () => {
     expect(results.inventory.hasPlaywrightConfig).toBe(true);
   });
@@ -211,6 +216,11 @@ describe("good-repo", () => {
   it("detects properly configured CI", () => {
     // Good repo has Cache@2, playwright install, report publishing
     expect(hasFinding(results, "CI-011")).toBe(false);
+  });
+
+  it("counts individual test cases across files", () => {
+    expect(results.inventory.testCases).toBeDefined();
+    expect(results.inventory.testCases).toBe(4);
   });
 });
 

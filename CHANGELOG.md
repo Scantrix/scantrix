@@ -1,6 +1,6 @@
 # Changelog
 
-## [5.2.2] - 2026-02-25
+## [5.2.2] - 2026-02-26
 
 ### Density-Normalized Health Scoring
 
@@ -13,6 +13,13 @@
 - Report hero card now shows density adjustment details in the footnote.
 - `ScanResult.summary` includes optional `densityAdjustment` metadata.
 - New test file: `tests/scoring.test.ts` with 19 unit tests covering all density scenarios.
+
+### Even Grade Thresholds
+
+- Grade bands rebalanced to more even 20-point intervals: A (≥80), B (≥60), C (≥40), D (≥25), F (<25).
+- Previous bands were uneven: B spanned 30 points (50–79), C only 20 (30–49), D only 15 (15–29).
+- Fixed stale `.auditrc.example.json`, `CLI_ARCHITECTURE.md`, and `CI_INTEGRATION.md` that still
+  referenced the pre-v5.2.0 risk-point thresholds.
 
 ---
 
@@ -51,9 +58,9 @@
   to preserve the `ScanResult` contract.
 - New scoring formula: `healthScore = round(100 * exp(-riskPoints / 80))` — exponential
   decay maps raw risk points to an intuitive bounded scale.
-- New grade thresholds: A (≥80), B (≥50), C (≥30), D (≥15), F (<15).
+- New grade thresholds: A (≥80), B (≥60), C (≥40), D (≥25), F (<25).
 - New exported helpers: `riskPointsToHealthScore()`, `gradeFromHealthScore()` in `scoring.ts`.
-- Default `.auditrc.json` thresholds updated: `{ gradeA: 80, gradeB: 50, gradeC: 30 }`.
+- Default `.auditrc.json` thresholds updated: `{ gradeA: 80, gradeB: 60, gradeC: 40 }`.
 - Report hero card now shows `Grade A (92/100)` style with updated footnote.
 - Dashboard: all pages updated — trend direction flipped (score up = good), progress bars
   use 0–100 range, labels renamed from "Risk Score" to "Health Score".

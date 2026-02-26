@@ -858,10 +858,10 @@ When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identi
 | Grade | Health Score | Level | Description |
 |-------|-------------|-------|-------------|
 | A | ≥ 80 | Excellent | Framework follows best practices |
-| B | ≥ 50 | Good | Minor issues, normal maintenance needed |
-| C | ≥ 30 | Fair | Notable issues requiring attention |
-| D | ≥ 15 | Poor | Serious issues, prioritize remediation |
-| F | < 15 | Critical | Systemic issues across the framework |
+| B | ≥ 60 | Good | Minor issues, normal maintenance needed |
+| C | ≥ 40 | Fair | Notable issues requiring attention |
+| D | ≥ 25 | Poor | Serious issues, prioritize remediation |
+| F | < 25 | Critical | Systemic issues across the framework |
 
 ### Worked examples
 
@@ -869,9 +869,9 @@ When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identi
 |-------------|-------------|-------|
 | 0 | 100 | A |
 | 20 | 78 | B |
-| 50 | 54 | B |
-| 85 | 35 | C |
-| 120 | 22 | D |
+| 50 | 54 | C |
+| 85 | 35 | D |
+| 120 | 22 | F |
 | 164 | 13 | F |
 
 Grade thresholds are customizable via `.auditrc.json`:
@@ -880,8 +880,8 @@ Grade thresholds are customizable via `.auditrc.json`:
 {
   "thresholds": {
     "gradeA": 80,
-    "gradeB": 50,
-    "gradeC": 30
+    "gradeB": 60,
+    "gradeC": 40
   }
 }
 ```

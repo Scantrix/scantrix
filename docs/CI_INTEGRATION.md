@@ -257,9 +257,9 @@ Place an `.auditrc.json` in the audited repository's root to customize behavior:
   },
   "exclude": ["**/generated/**", "**/vendor/**"],
   "thresholds": {
-    "gradeA": 20,
-    "gradeB": 50,
-    "gradeC": 85
+    "gradeA": 80,
+    "gradeB": 60,
+    "gradeC": 40
   }
 }
 ```

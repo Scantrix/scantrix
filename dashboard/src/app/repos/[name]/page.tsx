@@ -28,7 +28,7 @@ import {
   Clock, ChevronDown, ChevronRight, Settings, GitBranch, Monitor,
   Smartphone, Server, Workflow, Target, Zap, Flame, ListChecks,
   FolderOpen, Package, FileCode, Layers, BarChart3, SearchCode,
-  Scan, Hourglass, TrendingDown, Wrench
+  Scan, Hourglass, TrendingDown, Wrench, FlaskConical
 } from "lucide-react";
 
 /* ── Types ── */
@@ -808,6 +808,16 @@ export default function RepoDetailPage() {
                   <div>
                     <div className="text-lg font-bold">{inventory.testFiles.toLocaleString()}</div>
                     <div className="text-xs text-muted-foreground">Test Files</div>
+                  </div>
+                </div>
+              )}
+              {/* Test Cases */}
+              {inventory.testCases != null && (
+                <div className="flex items-center gap-3 rounded-lg border border-border/50 bg-muted/20 px-4 py-3">
+                  <FlaskConical className="h-5 w-5 text-teal-400 shrink-0" />
+                  <div>
+                    <div className="text-lg font-bold">{inventory.testCases.toLocaleString()}</div>
+                    <div className="text-xs text-muted-foreground">Test Cases</div>
                   </div>
                 </div>
               )}

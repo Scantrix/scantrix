@@ -375,9 +375,9 @@ Edit the generated file to disable rules, override severities, or exclude direct
   },
   "exclude": ["**/generated/**"],
   "thresholds": {
-    "gradeA": 20,
-    "gradeB": 50,
-    "gradeC": 85
+    "gradeA": 80,
+    "gradeB": 60,
+    "gradeC": 40
   }
 }
 ```

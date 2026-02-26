@@ -1476,9 +1476,19 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`<div class="stat-card stat-card-low"><div class="stat-label">Low</div><div class="stat-value stat-low">${lowCount}</div></div>`);
   md.push(`</div>`);
   const densityNote = risk.densityInfo
-    ? ` Density-adjusted for ${risk.densityInfo.effectiveTestFiles} test files (${risk.densityInfo.densityFactor}× scale factor, ${risk.densityInfo.findingDensity} findings/file).`
+    ? `${risk.densityInfo.effectiveTestFiles} test files (${risk.densityInfo.densityFactor}× scale factor, ${risk.densityInfo.findingDensity} findings/file).`
     : "";
-  md.push(`<div class="hero-footnote">Health score out of 100 — higher is better.${densityNote}</div>`);
+  const tooltipAttr = densityNote
+    ? ` title="${escapeHtml(densityNote)}"`
+    : "";
+  md.push(
+    `<div class="hero-footnote">` +
+      `Health score (0-100). Scale normalized based on findings-per-file density.` +
+      (densityNote
+        ? ` <span class="info-tip"${tooltipAttr} aria-label="Density details">ⓘ</span>`
+        : "") +
+    `</div>`
+  );
   md.push(`</div>`);
   md.push(``);
 
@@ -1741,6 +1751,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`|--------|-------|`);
   md.push(`| Total Files Scanned | ${results.inventory.totalFiles} |`);
   md.push(`| Test Files | ${results.inventory.testFiles} |`);
+  if (results.inventory.testCases != null) md.push(`| Test Cases | ${results.inventory.testCases} |`);
   md.push(`| Playwright Config | ${results.inventory.hasPlaywrightConfig ? `Found (${results.inventory.playwrightConfigPaths?.length ?? 1} file${(results.inventory.playwrightConfigPaths?.length ?? 1) > 1 ? 's' : ''})` : 'Not found'} |`);
   if (results.gitBranch) md.push(`| Branch | \`${results.gitBranch}\` |`);
   if (results.gitCommit) md.push(`| Commit | \`${results.gitCommit}\` |`);
@@ -1752,9 +1763,9 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(`|:-----:|-------|----------------|`);
   md.push(`| **A** | 🟢 Excellent | Framework follows best practices |`);
   md.push(`| **B** | 🟡 Good | Minor issues, normal maintenance needed |`);
-  md.push(`| **C** | 🟠 Needs Improvement | Notable issues requiring attention |`);
-  md.push(`| **D** | 🔴 Critical | Serious issues, prioritize remediation |`);
-  md.push(`| **F** | 🔴 Severe | Systemic issues across the framework |`);
+  md.push(`| **C** | 🟠 Fair | Notable issues requiring attention |`);
+  md.push(`| **D** | 🔴 Poor | Serious issues, prioritize remediation |`);
+  md.push(`| **F** | 🔴 Critical | Systemic issues across the framework |`);
   md.push(``);
   md.push(`> *Grades are calculated using severity-weighted findings and evidence concentration.*`);
   md.push(``);

@@ -1113,10 +1113,10 @@ Scantrix uses a **0–100 health score** where **higher is better**, similar to 
 | Health Score | Grade | Level | Action |
 |---|---|---|---|
 | 80–100 | A | Excellent | Maintain current quality |
-| 50–79 | B | Good | Schedule minor improvements |
-| 30–49 | C | Fair | Prioritize remediation |
-| 15–29 | D | Poor | Serious issues, prioritize immediately |
-| 0–14 | F | Critical | Systemic issues across the framework |
+| 60–79 | B | Good | Schedule minor improvements |
+| 40–59 | C | Fair | Prioritize remediation |
+| 25–39 | D | Poor | Serious issues, prioritize immediately |
+| 0–24 | F | Critical | Systemic issues across the framework |
 
 ### Score Calculation
 
