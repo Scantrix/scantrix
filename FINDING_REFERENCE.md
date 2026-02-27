@@ -11,6 +11,7 @@
 | PW-FLAKE-004 | networkidle usage | 🔴 HIGH | `waitForLoadState('networkidle')` or `waitUntil: 'networkidle'` |
 | PW-FLAKE-005 | Non-retrying assertions | 🔴 HIGH | `expect(await locator.isVisible()).toBe(true)` instead of web-first assertions |
 | PW-FLAKE-006 | test.fixme() markers | 🟡 LOW | `test.fixme()` markers indicate deferred broken tests |
+| PW-FLAKE-007 | Custom assertion wrappers bypass expect() | 🔴 HIGH | Custom functions (compare/assert/verify) used instead of auto-retrying `expect()` |
 
 ### Stability Findings (PW-STABILITY-*)
 | ID | Title | Severity | Description |
@@ -22,6 +23,8 @@
 | PW-STABILITY-004 | Tests without assertions | 🔴 HIGH | expect() calls < 50% of test count |
 | PW-STABILITY-005 | Browser resource leak risk | 🟠 MEDIUM | Manual browser/context/page creation without cleanup in afterEach/afterAll |
 | PW-STABILITY-006 | Too many assertions per test | 🟡 LOW | >5 expect() calls in a single test body (≥3 tests over threshold) |
+| PW-STABILITY-007 | Variable shadowing between scopes | 🔴 HIGH | `let`/`var` in describe scope shadowed by declaration in nested test/hook |
+| PW-STABILITY-008 | Manual browser.newContext() in tests | 🟠 MEDIUM | `browser.newContext()` in test bodies instead of fixtures |
 
 ### Locator Findings (PW-LOC-*)
 | ID | Title | Severity | Description |
@@ -90,6 +93,7 @@
 | ARCH-009 | Inline config overrides | 🟡 LOW | timeout/retries set inline in test() calls (≥3 occurrences) |
 | ARCH-010 | Hardcoded inline test data | 🟡 LOW | Variable-anchored inline data (usernames, addresses, dates, prices) in ≥2 files |
 | ARCH-011 | Emoji characters in log messages | 🟡 LOW | `console.log/warn/error/info/debug()` calls containing emoji/pictographic characters |
+| ARCH-012 | Mutating imported test data | 🔴 HIGH | Direct property assignment on imported data objects breaks parallel execution |
 
 ### Deprecated API Findings (PW-DEPREC-*)
 | ID | Title | Severity | Description |
@@ -151,7 +155,10 @@
 11. **PW-INSIGHT-011** - "Green but useless" tests: no assertions + retries = false confidence
 12. **ARCH-003** - Test coupling creates fragile, unpredictable tests
 13. **ARCH-005** - Hardcoded credentials are a security and maintainability risk
-14. **CI-002** - You can't debug failures without HTML reports
+14. **ARCH-012** - Mutating shared imported data objects breaks parallel execution
+15. **PW-STABILITY-007** - Variable shadowing between scopes causes undefined crashes in hooks
+16. **PW-FLAKE-007** - Custom assertion wrappers bypass Playwright's auto-retrying expect()
+17. **CI-002** - You can't debug failures without HTML reports
 15. **CI-009** - Retries enabled but no artifacts to debug failures
 16. **CI-007** (>500 files) - CI time is likely unbearable
 17. **DEP-002** - Deprecated npm packages may be unmaintained or vulnerable
@@ -162,6 +169,7 @@
 1. **PW-STABILITY-001** (no retries) - Isolation issues cause cascading failures
 2. **PW-STABILITY-002** - Large unorganized test files hard to maintain
 3. **PW-STABILITY-005** - Browser resource leaks can exhaust system resources
+4. **PW-STABILITY-008** - Manual browser.newContext() is fragile; use fixtures
 4. **PW-FLAKE-002** - Force clicks hide real issues
 5. **PW-LOC-001** - XPath is brittle and strongly discouraged by Playwright docs
 6. **PW-DEPREC-001** - Deprecated `$`/`$$` methods will be removed in future Playwright versions
@@ -1093,6 +1101,109 @@ test.describe('Custom browser tests', () => {
 ```
 
  **Better: Use Playwright's built-in fixtures instead of manual browser management.**
+
+### Pattern 25: Fix Variable Shadowing (PW-STABILITY-007)
+
+ **Before (outer variable stays undefined):**
+```typescript
+test.describe('Asset management', () => {
+  let homePage: any; // describe-scope
+
+  test('create asset', async ({ page }) => {
+    const homePage = await page.goto('/home'); // SHADOWS outer → outer stays undefined
+    await expect(page.locator('h1')).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await homePage?.close(); // homePage is undefined — crash!
+  });
+});
+```
+
+ **After (assign to outer variable):**
+```typescript
+test.describe('Asset management', () => {
+  let homePage: any;
+
+  test('create asset', async ({ page }) => {
+    homePage = await page.goto('/home'); // Assignment, not declaration
+    await expect(page.locator('h1')).toBeVisible();
+  });
+
+  test.afterAll(async () => {
+    await homePage?.close(); // Works correctly
+  });
+});
+```
+
+### Pattern 26: Replace Custom Assertion Wrappers (PW-FLAKE-007)
+
+ **Before (custom wrapper — no auto-retry):**
+```typescript
+import { compareActualAndExpectedResults } from '../utils/assertions';
+
+test('verify asset name', async ({ page }) => {
+  const text = await page.locator('.name').textContent();
+  await compareActualAndExpectedResults(text!, 'Expected Name');
+});
+```
+
+ **After (Playwright auto-retrying assertions):**
+```typescript
+test('verify asset name', async ({ page }) => {
+  await expect(page.locator('.name')).toHaveText('Expected Name');
+});
+```
+
+### Pattern 27: Use Fixtures Instead of Manual Contexts (PW-STABILITY-008)
+
+ **Before (manual lifecycle — fragile):**
+```typescript
+test('multi-user test', async ({ browser }) => {
+  const ctx1 = await browser.newContext({ storageState: './auth/user1.json' });
+  const page1 = await ctx1.newPage();
+  // If test fails here, ctx1 is never closed!
+});
+```
+
+ **After (fixture — automatic lifecycle):**
+```typescript
+// fixtures.ts
+const test = base.extend<{ userPage: Page }>({
+  userPage: async ({ browser }, use) => {
+    const ctx = await browser.newContext({ storageState: './auth/user1.json' });
+    const page = await ctx.newPage();
+    await use(page);
+    await ctx.close(); // Always runs, even on failure
+  },
+});
+
+test('multi-user test', async ({ userPage }) => {
+  await userPage.goto('/dashboard');
+});
+```
+
+### Pattern 28: Clone Imported Test Data (ARCH-012)
+
+ **Before (mutates shared module object):**
+```typescript
+import * as testData from '../test-data/assets';
+
+test('create asset', async ({ page }) => {
+  testData.assetPayload.ParentCustomerId = 'custom-123'; // Mutates shared object!
+  // Other parallel tests see the mutated value
+});
+```
+
+ **After (spread/clone for isolation):**
+```typescript
+import * as testData from '../test-data/assets';
+
+test('create asset', async ({ page }) => {
+  const payload = { ...testData.assetPayload, ParentCustomerId: 'custom-123' };
+  // Original is untouched — safe for parallel execution
+});
+```
 
 ## Typical Audit Workflow
 

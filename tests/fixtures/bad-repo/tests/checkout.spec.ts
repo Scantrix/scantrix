@@ -32,3 +32,18 @@ test('data grid interaction', async ({ page }) => {
   await page.goto('https://staging.example.com/data');
   // No assertion — just navigation
 });
+
+test.skip('broken test that nobody fixes', async ({ page }) => {
+  await page.goto('https://staging.example.com/broken');
+});
+
+test('search with deprecated methods', async ({ page }) => {
+  await page.goto('https://staging.example.com/search');
+  await page.type('#search-input', 'test query');
+  await page.locator('//input[@id=search-box]').fill('test');
+  await page.locator('button:right-of(#search)').click();
+  await page.locator('div:below(.header)').first();
+  expect(await page.locator('.nav').textContent()).toBe('Navigation');
+  expect(await page.locator('.header').isVisible()).toBe(true);
+  await page.waitForTimeout(500);
+});

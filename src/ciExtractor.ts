@@ -47,6 +47,8 @@ export type CiSummary = {
 
   /** CI-012: Does the pipeline explicitly set CI=true env var? */
   setsCiEnvTrue: boolean;
+  /** CI-012: Per-file tracking — pipelines that DO set CI=true */
+  ciEnvTrueFiles: string[];
   /** CI-013: Does any pipeline have a timeout guard? */
   hasPipelineTimeout: boolean;
   pipelineTimeoutMinutes?: number;
@@ -188,6 +190,7 @@ export async function extractCiSummary(repoPath: string): Promise<CiSummary> {
     failureHandlingMethods: [],
 
     setsCiEnvTrue: false,
+    ciEnvTrueFiles: [],
     hasPipelineTimeout: false,
     pipelineTimeoutMinutes: undefined,
     hasReporterInPlaywrightCommand: false,
@@ -399,16 +402,19 @@ export async function extractCiSummary(repoPath: string): Promise<CiSummary> {
     // GitHub Actions sets CI=true automatically, Azure DevOps does not.
     if (
       contentHasAny(c, [
-        /\bCI\s*:\s*['"]?true['"]?/i,
-        /\bCI=true\b/i,
-        /\benv\s*:\s*\n[^]*?\bCI\s*:\s/i, // env block with CI key
+        /\bCI\s*:\s*['"]?true['"]?/i,       // map-style:  CI: true / CI: 'true'
+        /\bCI=true\b/i,                      // script:     CI=true
+        /\benv\s*:\s*\n[^]*?\bCI\s*:\s/i,   // env block with CI key
+        /- name:\s*['"]?CI['"]?\s*\n\s*value:\s*['"]?true['"]?/i, // Azure list-style variables
       ])
     ) {
       summary.setsCiEnvTrue = true;
+      summary.ciEnvTrueFiles.push(normalize(f.file));
     }
     // GitHub Actions implicitly sets CI=true
     if (f.kind === "github_actions") {
       summary.setsCiEnvTrue = true;
+      summary.ciEnvTrueFiles.push(normalize(f.file));
     }
 
     // CI-013: Pipeline timeout detection
@@ -436,6 +442,7 @@ export async function extractCiSummary(repoPath: string): Promise<CiSummary> {
   // Dedupes (safe + makes CI-006 deterministic)
   summary.workersEnvFiles = [...new Set(summary.workersEnvFiles)];
   summary.shardingFiles = [...new Set(summary.shardingFiles)];
+  summary.ciEnvTrueFiles = [...new Set(summary.ciEnvTrueFiles)];
 
   return summary;
 }

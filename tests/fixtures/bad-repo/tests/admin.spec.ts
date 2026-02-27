@@ -1,5 +1,10 @@
 import { test, expect } from '@playwright/test';
 
+const username = 'testadmin';
+const firstName = 'Alice';
+const lastName = 'Johnson';
+const zipCode = '30301';
+
 test('admin page with inline config', { timeout: 120000 }, async ({ page }) => {
   await page.goto('https://staging.example.com/admin');
   await expect(page.locator('h1')).toHaveText('Admin');

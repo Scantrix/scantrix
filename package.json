@@ -18,9 +18,7 @@
   "dependencies": {
     "fast-glob": "^3.3.3",
     "markdown-it": "^14.1.0",
-    "minimist": "^1.2.8",
-    "react-loader-spinner": "^8.0.2",
-    "svg2png-wasm": "^1.4.1"
+    "minimist": "^1.2.8"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",

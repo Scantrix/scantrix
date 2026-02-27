@@ -1,0 +1,7 @@
+{
+  "name": "ci-012-all-list-style-repo",
+  "version": "1.0.0",
+  "devDependencies": {
+    "@playwright/test": "1.50.0"
+  }
+}

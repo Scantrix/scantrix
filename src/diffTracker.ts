@@ -166,7 +166,7 @@ export async function findLatestBaseline(
 }
 
 /**
- * Load the trend history — severity counts over time for dashboard graphing.
+ * Load the trend history — severity counts over time for trend analysis.
  */
 export async function loadTrendHistory(
   outDir: string,

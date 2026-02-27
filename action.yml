@@ -34,13 +34,6 @@ inputs:
     description: "Fail the action if high-severity findings are detected"
     required: false
     default: "false"
-  api-key:
-    description: "Scantrix API key for pushing results to dashboard"
-    required: false
-  api-url:
-    description: "Scantrix API URL (defaults to https://api.scantrix.com)"
-    required: false
-    default: "https://api.scantrix.com"
 
 outputs:
   findings-count:
@@ -210,18 +203,6 @@ runs:
               body,
             });
           }
-
-    - name: Push to Dashboard
-      if: inputs.api-key != ''
-      shell: bash
-      env:
-        SCANTRIX_API_KEY: ${{ inputs.api-key }}
-        SCANTRIX_API_URL: ${{ inputs.api-url }}
-        GITHUB_REPOSITORY: ${{ github.repository }}
-      run: |
-        npx repo-audit-agent push "${{ inputs.output-dir }}/findings.json" \
-          --key "$SCANTRIX_API_KEY" --url "$SCANTRIX_API_URL" \
-          --repo "$GITHUB_REPOSITORY"
 
     - name: Fail on High Severity
       if: inputs.fail-on-high == 'true'

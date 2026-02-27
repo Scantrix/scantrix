@@ -206,6 +206,28 @@ describe("calculateRiskScore (density normalization)", () => {
     expect(result.densityInfo!.effectiveTestFiles).toBe(250);
   });
 
+  it("reducing evidence count always improves the score (no dead zone)", () => {
+    // Core property: every occurrence fix should move the score.
+    // Test across a wide range: 100 → 50 → 25 → 10 → 5 → 1
+    const evidenceCounts = [100, 50, 25, 10, 5, 1];
+    const scores = evidenceCounts.map((n) => {
+      // Use a realistic multi-finding context so the single finding's change is
+      // measured against background noise (not in isolation).
+      const background = [
+        makeFinding("PW-FLAKE-002", "high", 15),
+        makeFinding("CI-001", "medium", 3),
+        makeFinding("ARCH-001", "low", 8),
+      ];
+      const target = makeFinding("PW-FLAKE-001", "high", n);
+      return calculateRiskScore([target, ...background]).riskScore;
+    });
+
+    // Each step should produce a strictly higher health score
+    for (let i = 1; i < scores.length; i++) {
+      expect(scores[i]).toBeGreaterThan(scores[i - 1]);
+    }
+  });
+
   it("real-world scenario: large sparse suite scores better than small dense suite", () => {
     // 24 findings across 981 files vs 18 findings across 105 files
     const largeRepoFindings = Array.from({ length: 24 }, (_, i) =>

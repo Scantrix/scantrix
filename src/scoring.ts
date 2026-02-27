@@ -72,19 +72,19 @@ export function gradeFromHealthScore(
   thresholds?: { gradeA: number; gradeB: number; gradeC: number },
 ): { grade: string; level: string; description: string } {
   const t = thresholds ?? { gradeA: 80, gradeB: 60, gradeC: 40 };
-  if (score >= t.gradeA) return { grade: "A", level: "Excellent", description: "Framework follows best practices" };
-  if (score >= t.gradeB) return { grade: "B", level: "Good", description: "Minor issues, normal maintenance needed" };
-  if (score >= t.gradeC) return { grade: "C", level: "Fair", description: "Notable issues requiring attention" };
-  if (score >= 25)       return { grade: "D", level: "Poor", description: "Serious issues, prioritize remediation" };
-  return                          { grade: "F", level: "Critical", description: "Systemic issues across the framework" };
+  if (score >= t.gradeA) return { grade: "A", level: "Excellent", description: "Well-structured framework with strong practices" };
+  if (score >= t.gradeB) return { grade: "B", level: "Good", description: "Solid foundation with room for improvement" };
+  if (score >= t.gradeC) return { grade: "C", level: "Fair", description: "Multiple areas need attention" };
+  if (score >= 25)       return { grade: "D", level: "Poor", description: "Significant issues affecting reliability" };
+  return                          { grade: "F", level: "Critical", description: "Widespread issues requiring immediate action" };
 }
 
 /**
  * Calculate the risk score and grade from a set of findings.
  *
- * This is the **single source of truth** for scoring — used by the CLI report,
- * the push client, and (indirectly) the dashboard.  Any change to the formula
- * must happen here so all consumers stay in sync.
+ * This is the **single source of truth** for scoring — used by the CLI report
+ * and all result output.  Any change to the formula must happen here so all
+ * consumers stay in sync.
  *
  * ## Density normalization
  *
@@ -114,9 +114,15 @@ export function calculateRiskScore(
 
   for (const f of findings) {
     const basePoints = severityScore(f.severity);
-    // Cap evidence impact; use log scale for better distribution with large evidence counts
-    // Capped at 3.5× (was 5×) to prevent large evidence sets from dominating the score
-    const evidenceMultiplier = Math.min(1 + Math.log2(Math.max(f.evidence.length, 1)), 3.5);
+    // Evidence multiplier: log₂ curve with 0.7 scaling coefficient (no hard cap).
+    // log₂ provides natural compression — doubling occurrences adds only 0.7 to the
+    // multiplier — so no single finding can dominate, while every occurrence reduction
+    // is rewarded in the score.
+    //
+    //   1 evidence → 1.00    25 evidence → 4.25
+    //   5 evidence → 2.63    50 evidence → 4.95
+    //  10 evidence → 3.32   100 evidence → 5.65
+    const evidenceMultiplier = 1 + 0.7 * Math.log2(Math.max(f.evidence.length, 1));
 
     let multiplier = 1;
     if (f.findingId.startsWith("PW-INSIGHT-")) multiplier = INSIGHT_MULTIPLIER;

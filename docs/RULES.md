@@ -66,6 +66,16 @@ Non-retrying assertions lead to flaky tests. Prefer Playwright web-first asserti
 
 `test.fixme()` indicates deferred broken tests and growing test debt.
 
+### PW-FLAKE-007 — Custom assertion wrappers bypass auto-retrying expect()
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Flakiness |
+| Analysis | AST-based: detects assertion-like function imports from relative paths used instead of `expect()` |
+| Trigger | ≥2 calls to custom assertion function AND (expect count < test count OR custom calls > expect count) |
+
+Custom assertion wrappers (e.g., `compareActualAndExpectedResults()`, `verifyElementState()`) imported from local utility modules do not auto-retry. Playwright's `expect()` matchers automatically retry until the condition is met or the timeout expires, which is essential for async DOM assertions.
+
 ---
 
 ## Stability Rules (PW-STABILITY-*)
@@ -133,6 +143,25 @@ Manual browser/context/page creation without cleanup in afterEach/afterAll leaks
 | Trigger | ≥3 files with >5 expect() calls in a single test body |
 
 Tests with excessive assertions verify too many behaviors at once, making failures harder to debug. Split into focused tests.
+
+### PW-STABILITY-007 — Variable shadowing between describe/test scopes
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Stability |
+| Analysis | AST-based: detects `let`/`var` in describe scope shadowed by declaration in nested test/hook callback |
+
+Variables declared with `let`/`var` in a `test.describe()` scope that are re-declared (shadowed) with `const`/`let`/`var` inside a nested `test()` or hook callback. The outer variable stays `undefined`, causing runtime crashes — typically in `afterAll` cleanup.
+
+### PW-STABILITY-008 — Manual browser.newContext() in test bodies
+| Property | Value |
+|----------|-------|
+| Severity | **Medium** |
+| Category | Stability |
+| Analysis | AST-based: detects `browser.newContext()` calls inside `test()` callbacks |
+| Scope | Excludes hooks (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`) |
+
+Tests creating browser contexts manually via `browser.newContext()` instead of using Playwright fixtures. Manual lifecycle management is fragile — contexts are not cleaned up on test failure, causing resource leaks. Differs from PW-STABILITY-005 (which flags missing cleanup) in that this flags the manual pattern itself.
 
 ---
 
@@ -392,6 +421,15 @@ Inline test data (usernames, addresses, dates, prices) should be extracted to fi
 | Patterns | `console.log/warn/error/info/debug()` calls containing emoji (Unicode Extended_Pictographic) |
 
 Emoji in console output can render as garbled characters (mojibake) or cause parsing issues in CI log aggregators, SIEM tools, and plain-text report archivers. Replace with plain-text equivalents (e.g., `[PASS]`, `[FAIL]`, `[WARN]`).
+
+### ARCH-012 — Mutating imported test data objects
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Architecture |
+| Analysis | AST-based: detects `=` assignments to properties of namespace/named imports from relative paths |
+
+Directly mutating properties of imported test-data objects (e.g., `testData.assetPayload.ParentCustomerId = ...`) breaks parallel execution. Node.js modules are singletons — mutations in one test pollute the shared object for all other tests running in the same worker. Use spread/clone patterns instead.
 
 ---
 
@@ -782,19 +820,19 @@ Emitted when the target repository path passed to the scanner does not exist or 
 
 | Category | Count |
 |----------|-------|
-| Flakiness (PW-FLAKE) | 6 |
-| Stability (PW-STABILITY) | 7 |
+| Flakiness (PW-FLAKE) | 7 |
+| Stability (PW-STABILITY) | 9 |
 | Locators (PW-LOC) | 3 |
 | Performance (PW-PERF) | 3 |
 | Deprecated API (PW-DEPREC) | 8 |
 | Dependencies (DEP) | 2 |
-| Architecture (ARCH) | 12 |
+| Architecture (ARCH) | 13 |
 | CI/CD (CI) | 14 |
 | Insights (PW-INSIGHT) | 15 |
 | Cypress (CY) | 7 |
 | Selenium (SE) | 4 |
 | System (SCAN) | 1 |
-| **Total** | **82** |
+| **Total** | **86** |
 
 ---
 
@@ -825,11 +863,23 @@ healthScore = round(100 × exp(-riskPoints / 80))
 
 ### Evidence scaling
 
-Each finding's evidence count is factored in using a log₂ scale, capped at 3.5×:
+Each finding's evidence count (number of occurrences) is factored in using a
+log₂ curve with a 0.7 scaling coefficient. There is no hard cap — every
+occurrence reduction is rewarded in the score. The log₂ curve provides natural
+compression so no single finding can dominate the overall grade.
 
 ```
-evidenceMultiplier = min(1 + log₂(max(evidenceCount, 1)), 3.5)
+evidenceMultiplier = 1 + 0.7 × log₂(max(evidenceCount, 1))
 ```
+
+| Occurrences | Multiplier | HIGH finding risk points |
+|:-----------:|:----------:|:------------------------:|
+| 1 | 1.00 | 3.0 |
+| 5 | 2.63 | 7.9 |
+| 10 | 3.32 | 10.0 |
+| 25 | 4.25 | 12.8 |
+| 50 | 4.95 | 14.8 |
+| 100 | 5.65 | 17.0 |
 
 ### Density normalization
 
@@ -857,11 +907,11 @@ When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identi
 
 | Grade | Health Score | Level | Description |
 |-------|-------------|-------|-------------|
-| A | ≥ 80 | Excellent | Framework follows best practices |
-| B | ≥ 60 | Good | Minor issues, normal maintenance needed |
-| C | ≥ 40 | Fair | Notable issues requiring attention |
-| D | ≥ 25 | Poor | Serious issues, prioritize remediation |
-| F | < 25 | Critical | Systemic issues across the framework |
+| A | ≥ 80 | Excellent | Well-structured framework with strong practices |
+| B | ≥ 60 | Good | Solid foundation with room for improvement |
+| C | ≥ 40 | Fair | Multiple areas need attention |
+| D | ≥ 25 | Poor | Significant issues affecting reliability |
+| F | < 25 | Critical | Widespread issues requiring immediate action |
 
 ### Worked examples
 

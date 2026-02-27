@@ -106,6 +106,30 @@ describe("bad-repo", () => {
     expect(f.severity).toBe("low");
   });
 
+  it("detects variable shadowing between scopes (PW-STABILITY-007)", () => {
+    expect(hasFinding(results, "PW-STABILITY-007")).toBe(true);
+    const f = getFinding(results, "PW-STABILITY-007")!;
+    expect(f.severity).toBe("high");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(1);
+    expect(f.evidence[0].snippet).toContain("shadowed");
+  });
+
+  it("detects manual browser.newContext() in test bodies (PW-STABILITY-008)", () => {
+    expect(hasFinding(results, "PW-STABILITY-008")).toBe(true);
+    const f = getFinding(results, "PW-STABILITY-008")!;
+    expect(f.severity).toBe("medium");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(2);
+    expect(f.evidence[0].snippet).toContain("browser context");
+  });
+
+  // ── Flakiness (AST) ──────────────────────────────────────────
+  it("detects custom assertion wrappers (PW-FLAKE-007)", () => {
+    expect(hasFinding(results, "PW-FLAKE-007")).toBe(true);
+    const f = getFinding(results, "PW-FLAKE-007")!;
+    expect(f.severity).toBe("high");
+    expect(f.evidence[0].snippet).toContain("expect()");
+  });
+
   // ── CI ─────────────────────────────────────────────────────────
   it("detects missing report publishing (CI-002)", () => {
     expect(hasFinding(results, "CI-002")).toBe(true);
@@ -123,6 +147,14 @@ describe("bad-repo", () => {
     expect(f.evidence.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("detects mutating imported test data (ARCH-012)", () => {
+    expect(hasFinding(results, "ARCH-012")).toBe(true);
+    const f = getFinding(results, "ARCH-012")!;
+    expect(f.severity).toBe("high");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(1);
+    expect(f.evidence[0].snippet).toContain("mutation");
+  });
+
   // ── Insights ───────────────────────────────────────────────────
   it("produces insight for hardcoded URLs + no baseURL (PW-INSIGHT-010)", () => {
     expect(hasFinding(results, "PW-INSIGHT-010")).toBe(true);
@@ -132,6 +164,18 @@ describe("bad-repo", () => {
   it("marks PW-FLAKE-001 as high severity", () => {
     const f = getFinding(results, "PW-FLAKE-001");
     expect(f?.severity).toBe("high");
+  });
+
+  // ── test.fixme file exclusion ─────────────────────────────────
+  it("excludes test.fixme files from rules other than PW-FLAKE-006", () => {
+    // login.spec.ts contains test.fixme() — its evidence should not appear
+    // in any finding except PW-FLAKE-006
+    const flake006 = getFinding(results, "PW-FLAKE-006")!;
+    expect(flake006.evidence.some((e) => e.file.includes("login.spec"))).toBe(true);
+
+    // PW-FLAKE-001 evidence must NOT reference login.spec.ts
+    const flake001 = getFinding(results, "PW-FLAKE-001")!;
+    expect(flake001.evidence.some((e) => e.file.includes("login.spec"))).toBe(false);
   });
 
   // ── False-positive suppression ────────────────────────────────
@@ -151,12 +195,12 @@ describe("bad-repo", () => {
 
   // ── Inventory ──────────────────────────────────────────────────
   it("counts test files correctly", () => {
-    expect(results.inventory.testFiles).toBe(6);
+    expect(results.inventory.testFiles).toBe(10);
   });
 
   it("counts individual test cases across files", () => {
     expect(results.inventory.testCases).toBeDefined();
-    expect(results.inventory.testCases).toBe(23);
+    expect(results.inventory.testCases).toBe(32);
   });
 
   it("detects Playwright config", () => {
@@ -209,6 +253,18 @@ describe("good-repo", () => {
     expect(hasFinding(results, "ARCH-010")).toBe(false);
   });
 
+  it("does NOT flag variable shadowing (PW-STABILITY-007)", () => {
+    expect(hasFinding(results, "PW-STABILITY-007")).toBe(false);
+  });
+
+  it("does NOT flag custom assertion wrappers (PW-FLAKE-007)", () => {
+    expect(hasFinding(results, "PW-FLAKE-007")).toBe(false);
+  });
+
+  it("does NOT flag mutating imported test data (ARCH-012)", () => {
+    expect(hasFinding(results, "ARCH-012")).toBe(false);
+  });
+
   it("has Playwright config detected", () => {
     expect(results.inventory.hasPlaywrightConfig).toBe(true);
   });
@@ -220,7 +276,7 @@ describe("good-repo", () => {
 
   it("counts individual test cases across files", () => {
     expect(results.inventory.testCases).toBeDefined();
-    expect(results.inventory.testCases).toBe(4);
+    expect(results.inventory.testCases).toBe(5);
   });
 });
 
@@ -342,4 +398,37 @@ describe("missing repo path", () => {
     expect(results.inventory.testFiles).toBe(0);
     expect(results.inventory.hasPlaywrightConfig).toBe(false);
   });
+});
+
+// ─── CI-012: List-style Azure variable detection ─────────────────────
+describe("CI-012 — list-style Azure DevOps variables", () => {
+  it("does NOT fire CI-012 when all pipelines set CI=true via list-style variables", async () => {
+    const results = await scanRepo(
+      path.join(FIXTURES, "ci-012-all-list-style-repo"),
+      { checkOutdatedDependencies: false },
+    );
+    expect(hasFinding(results, "CI-012")).toBe(false);
+  }, 30_000);
+
+  it("fires CI-012 only for the pipeline missing CI=true (per-file evidence)", async () => {
+    const results = await scanRepo(
+      path.join(FIXTURES, "ci-012-list-style-repo"),
+      { checkOutdatedDependencies: false },
+    );
+    expect(hasFinding(results, "CI-012")).toBe(true);
+    const f = getFinding(results, "CI-012")!;
+    // Evidence should reference only the pipeline missing CI, not the one that has it
+    const pipelineEvidence = f.evidence.filter((e) =>
+      e.snippet.includes("CI env var not explicitly set"),
+    );
+    expect(pipelineEvidence.length).toBe(1);
+    expect(pipelineEvidence[0].file).toContain("pipeline-missing-ci");
+  }, 30_000);
+
+  it("still detects map-style CI: true (good-repo baseline)", async () => {
+    const results = await scanRepo(path.join(FIXTURES, "good-repo"), {
+      checkOutdatedDependencies: false,
+    });
+    expect(hasFinding(results, "CI-012")).toBe(false);
+  }, 30_000);
 });

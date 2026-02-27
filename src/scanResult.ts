@@ -6,9 +6,9 @@ import type { DensityInfo } from "./scoring";
 /**
  * Canonical scan-result contract.
  *
- * Every scan run emits exactly one ScanResult.  All sinks (JSON file,
- * SQLite, Hub HTTP POST) consume this identical shape, ensuring a
- * consistent artifact regardless of execution environment.
+ * Every scan run emits exactly one ScanResult.  The JSON sink consumes
+ * this shape, ensuring a consistent artifact regardless of execution
+ * environment.
  */
 export interface ScanResult {
   /** Tool identifier — always "scantrix" */
@@ -69,7 +69,7 @@ export function buildScanResult(
     seleniumTestFiles: raw.inventory.seleniumTestFiles,
   });
   const effectivePath = opts.repoPath ?? raw.repoPath;
-  // Normalize repo name to lowercase to prevent case-sensitive duplicates in sinks/dashboard
+  // Normalize repo name to lowercase for consistency
   const repoName = (effectivePath.split(/[/\\]/).pop() || "unknown").toLowerCase();
 
   return {

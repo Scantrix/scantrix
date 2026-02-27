@@ -1,0 +1,26 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - name: CI
+    value: 'true'
+  - name: WORKERS
+    value: '4'
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '18.x'
+
+  - script: npm ci
+    displayName: 'Install dependencies'
+
+  - script: npx playwright install --with-deps chromium
+    displayName: 'Install Playwright browsers'
+
+  - script: npx playwright test
+    displayName: 'Run Playwright tests'
+    timeoutInMinutes: 30

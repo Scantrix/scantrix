@@ -1,5 +1,26 @@
 # Changelog
 
+## [6.0.0] - 2026-02-26
+
+### CLI Isolation for Open Source
+
+- **BREAKING**: Removed dashboard, hub sink, SQLite sink, and push client. The CLI is now a
+  standalone static analysis tool that produces report artifacts and an optional canonical JSON
+  result file.
+- Deleted `dashboard/` directory (Next.js web dashboard — moved to separate hub repo).
+- Deleted `src/sinks/hubSink.ts`, `src/sinks/sqliteSink.ts`, `src/pushClient.ts`.
+- Deleted `docs/DEPLOYMENT_GUIDE.md` (dashboard deployment docs).
+- Removed `push` subcommand — CLI now supports `scan` (default) and `init` only.
+- Removed `--sink`, `--sqlite-path`, `--ingest-url`, `--token` CLI flags.
+- Removed auto-push flags (`--push`, `--url`, `--key`, `--repo-name`).
+- Removed `SCANTRIX_SINK`, `SCANTRIX_SQLITE_PATH`, `SCANTRIX_INGEST_URL`, `SCANTRIX_TOKEN` env vars.
+- Simplified sink routing: `--json-path` writes canonical `ScanResult` JSON directly via `JsonSink`.
+- Removed `react-loader-spinner` and `svg2png-wasm` from dependencies.
+- Removed `api-key` / `api-url` inputs and dashboard push step from `action.yml`.
+- Updated all documentation to reflect CLI-only architecture.
+
+---
+
 ## [5.2.2] - 2026-02-26
 
 ### Density-Normalized Health Scoring

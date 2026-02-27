@@ -139,11 +139,7 @@ describe("buildScanResult", () => {
 describe("resolveSinkConfig", () => {
   const envBackup: Record<string, string | undefined> = {};
   const SINK_VARS = [
-    "SCANTRIX_SINK",
     "SCANTRIX_JSON_PATH",
-    "SCANTRIX_SQLITE_PATH",
-    "SCANTRIX_INGEST_URL",
-    "SCANTRIX_TOKEN",
   ];
 
   beforeEach(() => {
@@ -163,115 +159,38 @@ describe("resolveSinkConfig", () => {
     }
   });
 
-  it("defaults to local mode when no env/overrides", () => {
+  it("defaults to no jsonPath when no env/overrides", () => {
     const config = resolveSinkConfig();
-    expect(config.mode).toBe("local");
     expect(config.jsonPath).toBeUndefined();
-    expect(config.sqlitePath).toBeUndefined();
   });
 
-  it("reads mode from env var", () => {
-    process.env.SCANTRIX_SINK = "hub";
-    process.env.SCANTRIX_INGEST_URL = "https://hub.example.com/ingest";
-    process.env.SCANTRIX_TOKEN = "tok_123";
+  it("reads jsonPath from env var", () => {
+    process.env.SCANTRIX_JSON_PATH = "/out/result.json";
     const config = resolveSinkConfig();
-    expect(config.mode).toBe("hub");
-    expect(config.ingestUrl).toBe("https://hub.example.com/ingest");
-    expect(config.token).toBe("tok_123");
+    expect(config.jsonPath).toBe("/out/result.json");
   });
 
   it("CLI overrides take precedence over env vars", () => {
-    process.env.SCANTRIX_SINK = "local";
     process.env.SCANTRIX_JSON_PATH = "/from/env.json";
     const config = resolveSinkConfig({
-      mode: "hub",
       jsonPath: "/from/override.json",
-      ingestUrl: "https://override.example.com",
-      token: "override_tok",
     });
-    expect(config.mode).toBe("hub");
     expect(config.jsonPath).toBe("/from/override.json");
-  });
-
-  it("throws on invalid sink mode", () => {
-    expect(() => resolveSinkConfig({ mode: "invalid" as any }))
-      .toThrow(/Invalid SCANTRIX_SINK/);
-  });
-
-  it("throws when hub mode is missing INGEST_URL", () => {
-    expect(() => resolveSinkConfig({ mode: "hub", token: "tok" }))
-      .toThrow(/SCANTRIX_INGEST_URL/);
-  });
-
-  it("throws when hub mode is missing TOKEN", () => {
-    expect(() =>
-      resolveSinkConfig({ mode: "hub", ingestUrl: "https://x.com/ingest" }),
-    ).toThrow(/SCANTRIX_TOKEN/);
-  });
-
-  it("allows local mode without sqlitePath (optional)", () => {
-    const config = resolveSinkConfig({ mode: "local" });
-    expect(config.mode).toBe("local");
-    expect(config.sqlitePath).toBeUndefined();
-  });
-
-  it("reads all env vars", () => {
-    process.env.SCANTRIX_SINK = "local";
-    process.env.SCANTRIX_JSON_PATH = "/out/result.json";
-    process.env.SCANTRIX_SQLITE_PATH = "/data/scantrix.db";
-    const config = resolveSinkConfig();
-    expect(config.jsonPath).toBe("/out/result.json");
-    expect(config.sqlitePath).toBe("/data/scantrix.db");
   });
 });
 
 // ── buildSinks ──────────────────────────────────────────────────────
 
 describe("buildSinks", () => {
-  it("returns empty array in local mode with no paths", () => {
-    const sinks = buildSinks({ mode: "local" });
+  it("returns empty array with no paths", () => {
+    const sinks = buildSinks({});
     expect(sinks).toHaveLength(0);
   });
 
   it("returns JsonSink when jsonPath is set", () => {
-    const sinks = buildSinks({ mode: "local", jsonPath: "/out/result.json" });
+    const sinks = buildSinks({ jsonPath: "/out/result.json" });
     expect(sinks).toHaveLength(1);
     expect(sinks[0].name).toBe("json");
-  });
-
-  it("returns JsonSink + SqliteSink in local mode with both paths", () => {
-    const sinks = buildSinks({
-      mode: "local",
-      jsonPath: "/out/result.json",
-      sqlitePath: "/data/scan.db",
-    });
-    expect(sinks).toHaveLength(2);
-    expect(sinks[0].name).toBe("json");
-    expect(sinks[1].name).toBe("sqlite");
-  });
-
-  it("returns JsonSink + HubSink in hub mode", () => {
-    const sinks = buildSinks({
-      mode: "hub",
-      jsonPath: "/out/result.json",
-      ingestUrl: "https://hub.example.com",
-      token: "tok",
-    });
-    expect(sinks).toHaveLength(2);
-    expect(sinks[0].name).toBe("json");
-    expect(sinks[1].name).toBe("hub");
-  });
-
-  it("does not create SqliteSink in hub mode even if sqlitePath is set", () => {
-    const sinks = buildSinks({
-      mode: "hub",
-      sqlitePath: "/ignored.db",
-      ingestUrl: "https://hub.example.com",
-      token: "tok",
-    });
-    const names = sinks.map(s => s.name);
-    expect(names).not.toContain("sqlite");
-    expect(names).toContain("hub");
   });
 });
 

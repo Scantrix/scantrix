@@ -12,6 +12,12 @@ import type { CypressConfigSummary } from "./cypressExtractor";
 import { getGitInfo } from "./diffTracker";
 import type { AuditConfig } from "./auditConfig";
 import { isRuleDisabled, getEffectiveSeverity } from "./auditConfig";
+import {
+  findVariableShadowing,
+  findCustomAssertionWrappers,
+  findManualContextInTestBodies,
+  findTestDataMutations,
+} from "./astRuleHelpers";
 
 export type Evidence = { file: string; line: number; snippet: string };
 
@@ -574,7 +580,7 @@ const RULES: Rule[] = [
     title: "test.fixme() markers indicate deferred broken tests",
     severity: "low",
     description:
-      "test.fixme() marks a test as 'known to fail' so Playwright skips it. While better than test.skip() for visibility, accumulated fixme markers indicate growing technical debt in the test suite.",
+      "test.fixme() marks a test as 'known to fail' so Playwright skips it. While better than test.skip() for visibility, accumulated fixme markers indicate growing technical debt in the test suite.  *Note - tests marked with test.fixme() are not assessed in this audit.",
     recommendation:
       "Track test.fixme() tests in your backlog and aim to fix or remove them periodically. If a test has been test.fixme'd for a long time, consider whether it's still relevant.\nhttps://playwright.dev/docs/api/class-test#test-fixme-1",
     patterns: [
@@ -1631,6 +1637,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       hasFailureHandling: false,
       failureHandlingMethods: [],
       setsCiEnvTrue: false,
+      ciEnvTrueFiles: [],
       hasPipelineTimeout: false,
       pipelineTimeoutMinutes: undefined,
       hasReporterInPlaywrightCommand: false,
@@ -1750,6 +1757,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     for (const f of scopedFiles) {
       if (evidence.length >= max) break;
       const content = await fs.readFile(f, "utf8");
+      // Skip test.fixme files for all rules except PW-FLAKE-006
+      if (rule.id !== "PW-FLAKE-006" && /\btest\.fixme\s*\(/.test(content)) continue;
       // Skip non-test files for rules that only target test content
       if (rule.testContentOnly && !hasTestContent(content)) continue;
       const ev = await collectEvidence(
@@ -1875,6 +1884,19 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   const filteredTestFiles = testFiles.filter((f) => !isIgnored(f));
 
+  // Files containing test.fixme() are excluded from all rules except PW-FLAKE-006.
+  // Inventory counting (test files, test cases) uses the full filteredTestFiles.
+  const fixmeFileSet = new Set<string>();
+  for (const f of filteredTestFiles) {
+    try {
+      const content = await fs.readFile(f, "utf8");
+      if (/\btest\.fixme\s*\(/.test(content)) {
+        fixmeFileSet.add(f);
+      }
+    } catch { /* skip unreadable */ }
+  }
+  const nonFixmeTestFiles = filteredTestFiles.filter((f) => !fixmeFileSet.has(f));
+
   // Accumulate individual test case count across all Playwright test files
   let totalTestCases = 0;
 
@@ -1898,6 +1920,9 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestFile(content);
       totalTestCases += analysis.testCount;
+
+      // Skip rule analysis for test.fixme files (inventory counting above still applies)
+      if (fixmeFileSet.has(testFile)) continue;
 
       // STABILITY-003: Flag any beforeAll using the Playwright page fixture
       // This commonly causes shared browser state and flaky cascades.
@@ -2048,7 +2073,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const testsWithoutAssertions: Array<{ file: string; testCount: number; assertionCount: number }> = [];
 
-  for (const testFile of filteredTestFiles) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestFile(content);
@@ -2101,7 +2126,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const resourceLeakEvidence: ResourceLeakResult[] = [];
 
-  for (const testFile of filteredTestFiles) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const leaks = findBrowserResourceLeaks(normalize(testFile), content);
@@ -2186,7 +2211,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const allOverAsserted: OverAssertedTest[] = [];
 
-  for (const testFile of filteredTestFiles) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestFile(content);
@@ -2219,11 +2244,107 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // ============================================
+  // PW-STABILITY-007 + PW-FLAKE-007 + PW-STABILITY-008 (AST-based)
+  // Combined loop: read each file once, run all 3 AST analyses
+  // ============================================
+  const allShadowing: Array<{ file: string; evidence: string }> = [];
+  const allCustomAssertions: Array<{ file: string; evidence: string }> = [];
+  const allManualContexts: Array<{ file: string; line: number; evidence: string }> = [];
+
+  for (const testFile of nonFixmeTestFiles.slice(0, 200)) {
+    try {
+      const content = await fs.readFile(testFile, "utf8");
+      const relFile = normalize(testFile);
+
+      // PW-STABILITY-007: Variable shadowing
+      const shadows = findVariableShadowing(testFile, content);
+      for (const s of shadows) {
+        allShadowing.push({
+          file: relFile,
+          evidence: `'${s.name}' declared at line ${s.outerLine} (${s.outerKind}), shadowed by ${s.innerKind} at line ${s.innerLine}`,
+        });
+      }
+
+      // PW-FLAKE-007: Custom assertion wrappers
+      const assertions = findCustomAssertionWrappers(testFile, content);
+      for (const a of assertions) {
+        allCustomAssertions.push({
+          file: relFile,
+          evidence: `${a.importName}() called ${a.callCount}× vs ${a.expectCount} expect() call(s) (${a.testCount} test(s)) — from ${a.importPath}`,
+        });
+      }
+
+      // PW-STABILITY-008: Manual browser context in test bodies
+      const contexts = findManualContextInTestBodies(testFile, content);
+      for (const c of contexts) {
+        allManualContexts.push({
+          file: relFile,
+          line: c.line,
+          evidence: `Test '${c.testName}' creates ${c.count} browser context(s) manually — use fixtures for automatic lifecycle`,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (allShadowing.length > 0) {
+    findings.push({
+      findingId: "PW-STABILITY-007",
+      severity: "high",
+      title: "Variable shadowing between describe/test scopes",
+      description:
+        `${allShadowing.length} variable(s) declared with let/var in a describe scope are shadowed by a declaration inside a nested test or hook. The outer variable stays undefined, causing runtime crashes (typically in afterAll cleanup).`,
+      recommendation:
+        "Remove the inner declaration keyword (const/let/var) so the assignment targets the outer variable. Or use distinct names if intentional. Example: change `const homePageInternal = ...` inside test() to `homePageInternal = ...` (assignment, not declaration).",
+      evidence: allShadowing.slice(0, 10).map((s) => ({
+        file: s.file,
+        line: 1,
+        snippet: s.evidence,
+      })),
+    });
+  }
+
+  if (allCustomAssertions.length > 0) {
+    findings.push({
+      findingId: "PW-FLAKE-007",
+      severity: "high",
+      title: "Custom assertion wrappers bypass auto-retrying expect()",
+      description:
+        `${allCustomAssertions.length} file(s) use custom assertion functions imported from local utility modules instead of Playwright's built-in expect(). Custom wrappers do not auto-retry, leading to flaky assertions on async DOM changes.`,
+      recommendation:
+        "Replace custom assertion wrappers with Playwright's auto-retrying expect() matchers: expect(locator).toHaveText(), expect(locator).toBeVisible(), etc. If custom comparison logic is needed, wrap it inside expect.poll() or expect.toPass() for retry behavior.\nhttps://playwright.dev/docs/test-assertions",
+      evidence: allCustomAssertions.slice(0, 10).map((a) => ({
+        file: a.file,
+        line: 1,
+        snippet: a.evidence,
+      })),
+    });
+  }
+
+  if (allManualContexts.length > 0) {
+    findings.push({
+      findingId: "PW-STABILITY-008",
+      severity: "medium",
+      title: "Manual browser.newContext() in test bodies instead of fixtures",
+      description:
+        `${allManualContexts.length} test(s) manually create browser context(s) via browser.newContext(). Manual lifecycle management is fragile and can leave contexts unclosed on test failures (context is inaccessible in afterEach/afterAll if declared inside the test), causing resource leaks and port exhaustion.`,
+      recommendation:
+        "Use Playwright fixtures (test.extend) to manage browser contexts. Fixtures automatically handle setup and teardown, even when tests fail. For multi-context scenarios, create a custom fixture that provides pre-configured contexts.\nhttps://playwright.dev/docs/test-fixtures",
+      evidence: allManualContexts.slice(0, 10).map((c) => ({
+        file: c.file,
+        line: c.line,
+        snippet: c.evidence,
+      })),
+    });
+  }
+
+  // ============================================
   // PW-LOC-002: CSS selector nesting depth > 3
   // ============================================
   const deepCssEvidence: Evidence[] = [];
 
-  for (const testFile of filteredTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
     if (deepCssEvidence.length >= 25) break;
     try {
       const content = await fs.readFile(testFile, "utf8");
@@ -2272,7 +2393,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const largeInlineDataFiles: Array<{ file: string; largestBlock: number }> = [];
 
-  for (const testFile of filteredTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const lines = content.split(/\r?\n/);
@@ -2331,7 +2452,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const inlineConfigOverrides: Evidence[] = [];
 
-  for (const testFile of filteredTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
     if (inlineConfigOverrides.length >= 20) break;
     try {
       const content = await fs.readFile(testFile, "utf8");
@@ -2451,8 +2572,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   // ARCH-003: Test coupling (tests importing from other tests)
   const testCouplingIssues: TestCouplingAnalysis[] = [];
-  
-  for (const testFile of filteredTestFiles) {
+
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const analysis = analyzeTestCoupling(testFile, content);
@@ -2526,7 +2647,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   // ARCH-005: Hardcoded test data (credentials, emails, etc.)
   const allHardcodedData: HardcodedDataMatch[] = [];
-  const allTestAndPomFiles = [...filteredTestFiles, ...filteredPomFiles];
+  const allTestAndPomFiles = [...nonFixmeTestFiles, ...filteredPomFiles];
   
   for (const file of allTestAndPomFiles.slice(0, 100)) { // Limit to avoid performance issues
     try {
@@ -2590,8 +2711,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   {
     const inlineDataFiles: Array<{ file: string; matches: InlineTestDataMatch[] }> = [];
 
-    // Scope 1: Playwright test files (already have filteredTestFiles + filteredPomFiles)
-    for (const file of [...filteredTestFiles, ...filteredPomFiles].slice(0, 100)) {
+    // Scope 1: Playwright test files (already have nonFixmeTestFiles + filteredPomFiles)
+    for (const file of [...nonFixmeTestFiles, ...filteredPomFiles].slice(0, 100)) {
       // Skip files in fixtures/data/testdata directories (use repo-relative path to avoid
       // false matches on parent directories like tests/fixtures/bad-repo)
       const normalized = normalize(file);
@@ -2675,10 +2796,10 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // ARCH-006: Missing API mocking capability
-  const mockingAnalysis = analyzeApiMocking([...filteredTestFiles, ...filteredPomFiles], pomContentsMap);
+  const mockingAnalysis = analyzeApiMocking([...nonFixmeTestFiles, ...filteredPomFiles], pomContentsMap);
 
   // Also check test files
-  for (const testFile of filteredTestFiles.slice(0, 50)) {
+  for (const testFile of nonFixmeTestFiles.slice(0, 50)) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       pomContentsMap.set(testFile, content);
@@ -2686,24 +2807,24 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       // Skip
     }
   }
-  
-  const fullMockingAnalysis = analyzeApiMocking([...filteredTestFiles, ...filteredPomFiles], pomContentsMap);
-  
+
+  const fullMockingAnalysis = analyzeApiMocking([...nonFixmeTestFiles, ...filteredPomFiles], pomContentsMap);
+
   // Only flag if we have a meaningful number of test files but no mocking
-  if (filteredTestFiles.length >= 10 && !fullMockingAnalysis.hasRouteMocking && !fullMockingAnalysis.hasRequestInterception) {
+  if (nonFixmeTestFiles.length >= 10 && !fullMockingAnalysis.hasRouteMocking && !fullMockingAnalysis.hasRequestInterception) {
     findings.push({
       findingId: "ARCH-006",
       severity: "low",
       title: "No API mocking detected",
       description:
-        `No page.route() or request interception patterns found across ${filteredTestFiles.length} test files. While not always necessary, API mocking enables faster tests, better isolation from backend changes, and easier testing of error scenarios.`,
+        `No page.route() or request interception patterns found across ${nonFixmeTestFiles.length} test files. While not always necessary, API mocking enables faster tests, better isolation from backend changes, and easier testing of error scenarios.`,
       recommendation:
         "Consider using Playwright's page.route() for API mocking in integration tests. This allows testing error states, slow responses, and edge cases without backend dependencies. Create a helper function for common mock patterns. See: https://playwright.dev/docs/mock",
       evidence: [
         {
           file: `${repoPath} (analysis summary)`,
           line: 1,
-          snippet: `${filteredTestFiles.length} test files analyzed, no route mocking found`,
+          snippet: `${nonFixmeTestFiles.length} test files analyzed, no route mocking found`,
         },
       ],
     });
@@ -2739,6 +2860,44 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         file: normalize(e.file),
         line: 1,
         snippet: `${e.genericThrowCount} generic throw(s), no custom error types`,
+      })),
+    });
+  }
+
+  // ============================================
+  // ARCH-012: Mutating imported test data objects
+  // ============================================
+  const allDataMutations: Array<{ file: string; line: number; evidence: string }> = [];
+
+  for (const testFile of nonFixmeTestFiles.slice(0, 200)) {
+    try {
+      const content = await fs.readFile(testFile, "utf8");
+      const mutations = findTestDataMutations(testFile, content);
+      for (const m of mutations) {
+        allDataMutations.push({
+          file: normalize(testFile),
+          line: m.line,
+          evidence: m.snippet,
+        });
+      }
+    } catch {
+      continue;
+    }
+  }
+
+  if (allDataMutations.length > 0) {
+    findings.push({
+      findingId: "ARCH-012",
+      severity: "high",
+      title: "Mutating imported test data objects breaks parallel execution",
+      description:
+        `${allDataMutations.length} file(s) directly mutate properties of imported test-data objects. Node.js modules are singletons — mutations in one test pollute the shared object for all other tests running in the same worker, causing order-dependent failures and broken parallel execution.`,
+      recommendation:
+        "Deep-clone or spread imported data in each test instead of mutating the original: `const payload = { ...testData.assetPayload, ParentCustomerId: myId }`. For complex objects, use structuredClone() or a factory function that returns fresh copies.",
+      evidence: allDataMutations.slice(0, 10).map((m) => ({
+        file: m.file,
+        line: m.line,
+        snippet: m.evidence,
       })),
     });
   }
@@ -3283,25 +3442,31 @@ const pwUsesWorkersEnv =
     || pwRetries.includes("process.env.CI")
     || (inventory.playwrightConfigSummary?.workers ?? "").includes("process.env.CI");
 
-  if (pwUsesEnvCI && !ci.setsCiEnvTrue && ci.files.length > 0) {
-    // Only flag for Azure Pipelines (GitHub Actions sets CI=true automatically)
-    const hasOnlyAzure = ci.detectedAzurePipelines && !ci.detectedGitHubActions;
-    if (hasOnlyAzure) {
+  if (pwUsesEnvCI && ci.files.length > 0) {
+    // Only flag Azure Pipelines (GitHub Actions sets CI=true automatically)
+    const azureFiles = ci.files.filter((f) => f.kind === "azure_pipelines");
+    const missingCiEnvFiles = azureFiles.filter(
+      (f) => !ci.ciEnvTrueFiles.includes(f.file),
+    );
+
+    if (missingCiEnvFiles.length > 0) {
+      const total = azureFiles.length;
+      const missing = missingCiEnvFiles.length;
       findings.push({
         findingId: "CI-012",
         severity: "medium",
         title: "Playwright config depends on CI env var, but pipelines may not set it",
         description:
-          `Playwright config references process.env.CI (e.g., retries: process.env.CI ? 2 : 0) but Azure Pipelines do not set CI=true by default. This means CI-specific configuration (retries, workers, headless) may not activate, causing behavior to differ between local and CI runs.`,
+          `Playwright config references process.env.CI (e.g., retries: process.env.CI ? 2 : 0) but ${missing} of ${total} Azure Pipeline${total > 1 ? "s" : ""} do not set CI=true. Azure Pipelines do not set CI=true by default, so CI-specific configuration (retries, workers, headless) may not activate.`,
         recommendation:
-          "Add 'CI: true' to the environment variables section of your Azure Pipeline YAML. GitHub Actions sets CI=true automatically. Verify with a pipeline run that process.env.CI evaluates truthy.",
+          "Add 'CI: true' to the environment variables section of your Azure Pipeline YAML (map-style `CI: true` or list-style `- name: CI / value: true`). GitHub Actions sets CI=true automatically.",
         evidence: [
           {
             file: pw?.configPath ?? "playwright.config",
             line: 1,
             snippet: `retries: ${pwRetries || "(uses process.env.CI)"}`,
           },
-          ...ci.files.slice(0, 3).map((f) => ({
+          ...missingCiEnvFiles.slice(0, 5).map((f) => ({
             file: f.file,
             line: 1,
             snippet: "CI env var not explicitly set in this pipeline",

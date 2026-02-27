@@ -31,8 +31,6 @@ jobs:
           format: "md,html,json,sarif"
           post-comment: "true"
           fail-on-high: "false"
-          # Uncomment to push results to the Scantrix dashboard:
-          # api-key: ${{ secrets.SCANTRIX_API_KEY }}
 
       # Optional: Upload SARIF to GitHub Code Scanning
       - name: Upload SARIF

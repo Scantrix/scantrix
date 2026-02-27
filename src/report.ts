@@ -1761,11 +1761,11 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   md.push(``);
   md.push(`| Grade | Level | Interpretation |`);
   md.push(`|:-----:|-------|----------------|`);
-  md.push(`| **A** | 🟢 Excellent | Framework follows best practices |`);
-  md.push(`| **B** | 🟡 Good | Minor issues, normal maintenance needed |`);
-  md.push(`| **C** | 🟠 Fair | Notable issues requiring attention |`);
-  md.push(`| **D** | 🔴 Poor | Serious issues, prioritize remediation |`);
-  md.push(`| **F** | 🔴 Critical | Systemic issues across the framework |`);
+  md.push(`| **A** | 🟢 Excellent | Well-structured framework with strong practices |`);
+  md.push(`| **B** | 🟡 Good | Solid foundation with room for improvement |`);
+  md.push(`| **C** | 🟠 Fair | Multiple areas need attention |`);
+  md.push(`| **D** | 🔴 Poor | Significant issues affecting reliability |`);
+  md.push(`| **F** | 🔴 Critical | Widespread issues requiring immediate action |`);
   md.push(``);
   md.push(`> *Grades are calculated using severity-weighted findings and evidence concentration.*`);
   md.push(``);
