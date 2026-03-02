@@ -1,6 +1,6 @@
 {
   "name": "repo-audit-agent",
-  "version": "5.2.2",
+  "version": "6.3.0",
   "description": "Static analysis and configuration-aware auditing engine for automation repositories",
   "main": "index.js",
   "scripts": {

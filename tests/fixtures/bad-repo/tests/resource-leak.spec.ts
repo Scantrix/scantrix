@@ -17,3 +17,13 @@ test('another leaked browser', async () => {
   await expect(page.locator('h1')).toHaveText('Settings');
   // Missing cleanup — browser process will be orphaned
 });
+
+test('leaked API request context', async ({ request }) => {
+  const apiContext = await request.newContext({
+    baseURL: 'https://api.example.com',
+    extraHTTPHeaders: { Authorization: 'Bearer token123' },
+  });
+  const response = await apiContext.get('/users');
+  expect(response.ok()).toBeTruthy();
+  // Missing apiContext.dispose() — connections will leak
+});

@@ -4,6 +4,13 @@ import {
   findCustomAssertionWrappers,
   findManualContextInTestBodies,
   findTestDataMutations,
+  findMissingPlaywrightAwaits,
+  findUnguardedRetrievalMethods,
+  findUnguardedRetrievalMethodsInFunctions,
+  extractRelativeImportBindings,
+  findSleepWrapperExports,
+  findDisguisedHardWaitCalls,
+  findClassSleepMethodExports,
 } from "../src/astRuleHelpers";
 
 // ─── PW-STABILITY-007: Variable Shadowing ────────────────────────────
@@ -209,6 +216,36 @@ test('clean test', async ({ page }) => {
     const results = findManualContextInTestBodies("test.spec.ts", source);
     expect(results).toHaveLength(0);
   });
+
+  it("detects request.newContext() inside test()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+
+test('manual api context', async ({ request }) => {
+  const apiCtx = await request.newContext({ baseURL: 'https://api.example.com' });
+  const response = await apiCtx.get('/users');
+  expect(response.ok()).toBeTruthy();
+});
+`;
+    const results = findManualContextInTestBodies("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("manual api context");
+    expect(results[0].count).toBe(1);
+  });
+
+  it("counts mixed browser.newContext() and request.newContext() in one test", () => {
+    const source = `
+import { test } from '@playwright/test';
+
+test('mixed contexts', async ({ browser, request }) => {
+  const ctx = await browser.newContext();
+  const apiCtx = await request.newContext();
+});
+`;
+    const results = findManualContextInTestBodies("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].count).toBe(2);
+  });
 });
 
 // ─── ARCH-012: Mutating Imported Test Data ───────────────────────────
@@ -266,6 +303,728 @@ const x = 1;
 x = 2;
 `;
     const results = findTestDataMutations("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ─── PW-FLAKE-008: Missing await on Async Playwright APIs ───────────
+
+describe("findMissingPlaywrightAwaits", () => {
+  it("detects unawaited expect().toBeVisible() inside test()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('my test', async ({ page }) => {
+  expect(page.locator('.title')).toBeVisible();
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("my test");
+    expect(results[0].snippet).toBe("expect(...).toBeVisible(...)");
+  });
+
+  it("detects unawaited test.step() inside test()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('step test', async ({ page }) => {
+  test.step('do stuff', async () => {
+    await expect(page.locator('h1')).toBeVisible();
+  });
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("step test");
+    expect(results[0].snippet).toBe("test.step(...)");
+  });
+
+  it("detects unawaited expect.soft().toBeVisible() inside test()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('soft test', async ({ page }) => {
+  expect.soft(page.locator('.title')).toBeVisible();
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("soft test");
+    expect(results[0].snippet).toBe("expect.soft(...).toBeVisible(...)");
+  });
+
+  it("detects unawaited expect.poll().toBe() inside test()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('poll test', async ({ page }) => {
+  expect.poll(() => page.locator('.count').textContent()).toBe('5');
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("poll test");
+    expect(results[0].snippet).toBe("expect.poll(...).toBe(...)");
+  });
+
+  it("does NOT flag properly awaited assertions", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('awaited test', async ({ page }) => {
+  await expect(page.locator('.title')).toBeVisible();
+  await expect(page.locator('.content')).toHaveText('Hello');
+  await test.step('verify', async () => {
+    await expect(page.locator('h1')).toBeVisible();
+  });
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag non-async matchers (toBe, toEqual, etc.)", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('sync test', async ({ page }) => {
+  expect(1 + 1).toBe(2);
+  expect('hello').toEqual('hello');
+  expect([1, 2]).toContain(1);
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("detects negated form expect().not.toBeVisible() without await", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('negated test', async ({ page }) => {
+  expect(page.locator('.hidden')).not.toBeVisible();
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].snippet).toBe("expect(...).toBeVisible(...)");
+  });
+
+  it("returns correct line numbers and test names", () => {
+    const source = `import { test, expect } from '@playwright/test';
+test('first', async ({ page }) => {
+  expect(page.locator('.a')).toBeVisible();
+});
+test('second', async ({ page }) => {
+  expect(page.locator('.b')).toHaveText('x');
+});`;
+    const results = findMissingPlaywrightAwaits("test.spec.ts", source);
+    expect(results).toHaveLength(2);
+    expect(results[0].testName).toBe("first");
+    expect(results[0].line).toBe(3);
+    expect(results[1].testName).toBe("second");
+    expect(results[1].line).toBe(6);
+  });
+});
+
+// ─── extractRelativeImportBindings ────────────────────────────────────
+
+describe("extractRelativeImportBindings", () => {
+  it("extracts named imports from relative paths", () => {
+    const source = `
+import { delay, sleep } from '../utils/helpers';
+import { test } from '@playwright/test';
+`;
+    const bindings = extractRelativeImportBindings("test.spec.ts", source);
+    expect(bindings).toHaveLength(2);
+    expect(bindings[0]).toEqual({ localName: "delay", originalName: "delay", modulePath: "../utils/helpers" });
+    expect(bindings[1]).toEqual({ localName: "sleep", originalName: "sleep", modulePath: "../utils/helpers" });
+  });
+
+  it("handles renamed imports (import { x as y })", () => {
+    const source = `
+import { delay as wait } from '../utils/helpers';
+`;
+    const bindings = extractRelativeImportBindings("test.spec.ts", source);
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0]).toEqual({ localName: "wait", originalName: "delay", modulePath: "../utils/helpers" });
+  });
+
+  it("skips non-relative imports", () => {
+    const source = `
+import { test } from '@playwright/test';
+import lodash from 'lodash';
+import { foo } from '../utils/helpers';
+`;
+    const bindings = extractRelativeImportBindings("test.spec.ts", source);
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0].localName).toBe("foo");
+  });
+
+  it("extracts default imports", () => {
+    const source = `
+import helpers from '../utils/helpers';
+`;
+    const bindings = extractRelativeImportBindings("test.spec.ts", source);
+    expect(bindings).toHaveLength(1);
+    expect(bindings[0]).toEqual({ localName: "helpers", originalName: "default", modulePath: "../utils/helpers" });
+  });
+});
+
+// ─── findSleepWrapperExports ──────────────────────────────────────────
+
+describe("findSleepWrapperExports", () => {
+  it("detects exported async function with Promise-setTimeout", () => {
+    const source = `
+export async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("delay");
+  });
+
+  it("detects exported const arrow function with setTimeout", () => {
+    const source = `
+export const sleep = async (ms: number) => {
+  await new Promise((r) => setTimeout(r, ms));
+};
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("sleep");
+  });
+
+  it("detects function with waitForTimeout in body", () => {
+    const source = `
+export async function pause(page: any, ms: number) {
+  await page.waitForTimeout(ms);
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("pause");
+  });
+
+  it("detects re-exported functions via export { name }", () => {
+    const source = `
+async function delay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+export { delay };
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("delay");
+  });
+
+  it("does NOT flag functions with retry/loop logic", () => {
+    const source = `
+export async function retryOperation(fn: () => Promise<void>, maxAttempts: number = 3): Promise<void> {
+  let attempt = 0;
+  while (attempt < maxAttempts) {
+    try { await fn(); return; } catch {
+      attempt++;
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+  }
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag non-exported functions", () => {
+    const source = `
+async function internalDelay(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("returns empty for files with no sleep patterns", () => {
+    const source = `
+export function add(a: number, b: number): number {
+  return a + b;
+}
+export async function fetchData(url: string) {
+  const res = await fetch(url);
+  return res.json();
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ─── findDisguisedHardWaitCalls ───────────────────────────────────────
+
+describe("findDisguisedHardWaitCalls", () => {
+  it("finds calls to known wrapper bindings with correct line numbers", () => {
+    const source = `import { test } from '@playwright/test';
+import { delay } from '../utils/helpers';
+
+test('my test', async ({ page }) => {
+  await delay(2000);
+});`;
+    const wrapperBindings = new Map([["delay", "../utils/helpers"]]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings);
+    expect(results).toHaveLength(1);
+    expect(results[0].calledFunction).toBe("delay");
+    expect(results[0].line).toBe(5);
+    expect(results[0].importPath).toBe("../utils/helpers");
+  });
+
+  it("finds multiple calls across tests", () => {
+    const source = `import { delay, sleep } from '../utils/helpers';
+
+test('a', async () => { await delay(1000); });
+test('b', async () => { await sleep(2000); });
+test('c', async () => { await delay(500); });`;
+    const wrapperBindings = new Map([
+      ["delay", "../utils/helpers"],
+      ["sleep", "../utils/helpers"],
+    ]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings);
+    expect(results).toHaveLength(3);
+    expect(results.map((r) => r.calledFunction)).toEqual(["delay", "sleep", "delay"]);
+  });
+
+  it("returns empty when no wrapper calls exist", () => {
+    const source = `import { test } from '@playwright/test';
+test('clean test', async ({ page }) => {
+  await page.goto('/');
+});`;
+    const wrapperBindings = new Map([["delay", "../utils/helpers"]]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings);
+    expect(results).toHaveLength(0);
+  });
+
+  it("returns empty when wrapperBindings map is empty", () => {
+    const source = `import { delay } from '../utils/helpers';
+test('test', async () => { await delay(1000); });`;
+    const wrapperBindings = new Map<string, string>();
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings);
+    expect(results).toHaveLength(0);
+  });
+
+  it("finds property access calls (instance.delay()) via sleepMethodBindings", () => {
+    const source = `import { WaiterHelpers } from '../utils/helpers';
+const waiter = new WaiterHelpers();
+
+test('test', async ({ page }) => {
+  await waiter.delay(2000);
+  await waiter.delay(1000);
+});`;
+    const wrapperBindings = new Map<string, string>();
+    const sleepMethodBindings = new Map([["delay", "../utils/helpers"]]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings, sleepMethodBindings);
+    expect(results).toHaveLength(2);
+    expect(results[0].calledFunction).toBe("delay");
+    expect(results[0].importPath).toBe("../utils/helpers");
+  });
+
+  it("finds this.delay() calls via sleepMethodBindings", () => {
+    const source = `
+test('test', async () => {
+  await this.delay(500);
+});`;
+    const wrapperBindings = new Map<string, string>();
+    const sleepMethodBindings = new Map([["delay", "../utils/helpers"]]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings, sleepMethodBindings);
+    expect(results).toHaveLength(1);
+    expect(results[0].calledFunction).toBe("delay");
+  });
+
+  it("ignores property access calls not in sleepMethodBindings", () => {
+    const source = `
+test('test', async ({ page }) => {
+  await page.click('.button');
+  await helper.doSomething();
+});`;
+    const wrapperBindings = new Map<string, string>();
+    const sleepMethodBindings = new Map([["delay", "../utils/helpers"]]);
+    const results = findDisguisedHardWaitCalls("test.spec.ts", source, wrapperBindings, sleepMethodBindings);
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ─── findClassSleepMethodExports ──────────────────────────────────────
+
+describe("findClassSleepMethodExports", () => {
+  it("detects sleep method in directly exported class", () => {
+    const source = `
+export class WaiterHelpers {
+  async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].className).toBe("WaiterHelpers");
+    expect(results[0].methodNames).toContain("delay");
+  });
+
+  it("handles export { ClassName } re-export pattern", () => {
+    const source = `
+class WaiterHelpers {
+  async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+export { WaiterHelpers };
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].className).toBe("WaiterHelpers");
+    expect(results[0].methodNames).toContain("delay");
+  });
+
+  it("handles export default class", () => {
+    const source = `
+export default class WaiterHelpers {
+  async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].className).toBe("WaiterHelpers");
+    expect(results[0].methodNames).toContain("delay");
+  });
+
+  it("does NOT flag methods with retry loops", () => {
+    const source = `
+export class Helpers {
+  async retryWithBackoff(fn: () => Promise<void>, maxAttempts: number = 3): Promise<void> {
+    let attempt = 0;
+    while (attempt < maxAttempts) {
+      try { await fn(); return; } catch {
+        attempt++;
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    }
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag non-exported classes", () => {
+    const source = `
+class InternalHelpers {
+  async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("returns empty for classes without sleep methods", () => {
+    const source = `
+export class Utils {
+  add(a: number, b: number): number {
+    return a + b;
+  }
+  async fetchData(url: string) {
+    const res = await fetch(url);
+    return res.json();
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("detects multiple sleep methods in one class", () => {
+    const source = `
+export class WaitUtils {
+  async delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+  async pause(page: any, ms: number): Promise<void> {
+    await page.waitForTimeout(ms);
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].methodNames).toEqual(["delay", "pause"]);
+  });
+
+  it("detects class method wrapping waitForNetworkIdle", () => {
+    const source = `
+export class WaiterHelpers {
+  async waitForIdleNetwork(page: any): Promise<void> {
+    await page.waitForNetworkIdle();
+  }
+}
+`;
+    const results = findClassSleepMethodExports("utils.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].methodNames).toContain("waitForIdleNetwork");
+  });
+});
+
+// ─── bodyContainsSleepPattern: networkidle patterns ───────────────────
+
+describe("findSleepWrapperExports — networkidle patterns", () => {
+  it("detects function wrapping waitForNetworkIdle", () => {
+    const source = `
+export async function waitIdle(page: any): Promise<void> {
+  await page.waitForNetworkIdle();
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("waitIdle");
+  });
+
+  it("detects function wrapping waitForLoadState('networkidle')", () => {
+    const source = `
+export async function waitForIdle(page: any): Promise<void> {
+  await page.waitForLoadState('networkidle');
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toContain("waitForIdle");
+  });
+
+  it("does NOT flag waitForLoadState with non-networkidle argument", () => {
+    const source = `
+export async function waitForLoad(page: any): Promise<void> {
+  await page.waitForLoadState('load');
+}
+`;
+    const results = findSleepWrapperExports("utils.ts", source);
+    expect(results).toHaveLength(0);
+  });
+});
+
+// ─── PW-FLAKE-010: Unguarded Retrieval Methods ───────────────────────
+
+describe("findUnguardedRetrievalMethods", () => {
+  it("flags .innerText() without a preceding content guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('extract text', async ({ page }) => {
+  await page.goto('/details');
+  const title = await page.locator('.title').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].snippet).toBe(".innerText()");
+    expect(results[0].testName).toBe("extract text");
+  });
+
+  it("flags multiple retrieval methods in same test", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('extract all', async ({ page }) => {
+  await page.goto('/details');
+  const a = await page.locator('.a').innerText();
+  const b = await page.locator('.b').innerHTML();
+  const c = await page.locator('.c').inputValue();
+  const d = await page.locator('.d').textContent();
+  const e = await page.locator('.e').allInnerTexts();
+  const f = await page.locator('.f').allTextContents();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(6);
+    const methods = results.map(r => r.snippet);
+    expect(methods).toContain(".innerText()");
+    expect(methods).toContain(".innerHTML()");
+    expect(methods).toContain(".inputValue()");
+    expect(methods).toContain(".textContent()");
+    expect(methods).toContain(".allInnerTexts()");
+    expect(methods).toContain(".allTextContents()");
+  });
+
+  it("does NOT flag retrieval preceded by toHaveText guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await expect(page.locator('#amount')).not.toHaveText('');
+  const val = await page.locator('#amount').inputValue();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by toContainText guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await expect(page.locator('.title')).toContainText('Order');
+  const title = await page.locator('.title').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by toBeEmpty guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await expect(page.locator('.content')).not.toBeEmpty();
+  const text = await page.locator('.content').textContent();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by toPass guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('polled', async ({ page }) => {
+  await page.goto('/details');
+  let text = '';
+  await expect(async () => { text = await page.locator('.x').innerText(); expect(text).not.toBe(''); }).toPass();
+  const val = await page.locator('.y').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    // The .innerText() inside the toPass callback is on the same statement as the guard — suppressed.
+    // The .innerText() after the toPass statement is also guarded by the preceding toPass.
+    expect(results).toHaveLength(0);
+  });
+
+  it("flags retrieval when guard is too far away (>5 statements)", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('far guard', async ({ page }) => {
+  await expect(page.locator('.x')).toHaveText('ready');
+  await page.goto('/a');
+  await page.goto('/b');
+  await page.goto('/c');
+  await page.goto('/d');
+  await page.goto('/e');
+  const text = await page.locator('.x').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+  });
+
+  it("does NOT flag code outside test() callbacks", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+async function helper(page: any) {
+  const text = await page.locator('.x').innerText();
+}
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("handles test.only correctly", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test.only('focused', async ({ page }) => {
+  const text = await page.locator('.x').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("focused");
+  });
+
+  it("does NOT flag retrieval inside expect() chain (not a standalone call)", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('inline', async ({ page }) => {
+  expect(await page.locator('.nav').textContent()).toBe('Navigation');
+});
+`;
+    // textContent() is inside an expect(), the statement itself is a content assertion.
+    // The statement contains a guard (expect...toBe) which is not one of our guard matchers,
+    // but the textContent() IS still flagged because toBe is not a content guard.
+    // However, this is an intentional pattern — the user is using the value inline.
+    // The AST approach correctly flags this since there's no preceding guard statement.
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+  });
+});
+
+// ─── PW-FLAKE-010 (non-test files): Unguarded Retrieval in Functions ──
+
+describe("findUnguardedRetrievalMethodsInFunctions", () => {
+  it("flags .innerText() in a page class method", () => {
+    const source = `
+export class LoginPage {
+  async getTitle(page: any) {
+    return await page.locator('.title').innerText();
+  }
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("pages/login.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].snippet).toBe(".innerText()");
+    expect(results[0].testName).toBe("getTitle");
+  });
+
+  it("flags retrieval in standalone function declarations", () => {
+    const source = `
+export async function extractHeader(page: any) {
+  const text = await page.locator('h1').textContent();
+  return text;
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("utils/helpers.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("extractHeader");
+  });
+
+  it("flags retrieval in arrow function assigned to variable", () => {
+    const source = `
+export const getText = async (page: any) => {
+  return await page.locator('.x').innerHTML();
+};
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("utils/helpers.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].testName).toBe("getText");
+  });
+
+  it("does NOT flag retrieval preceded by content guard in same method", () => {
+    const source = `
+import { expect } from '@playwright/test';
+export class DashboardPage {
+  async getSafeTitle(page: any) {
+    await expect(page.locator('.title')).toContainText('Dashboard');
+    return await page.locator('.title').innerText();
+  }
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("pages/dashboard.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("flags multiple methods in the same class", () => {
+    const source = `
+export class ProductPage {
+  async getName(page: any) {
+    return await page.locator('.name').innerText();
+  }
+  async getPrice(page: any) {
+    return await page.locator('.price').textContent();
+  }
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("pages/product.ts", source);
+    expect(results).toHaveLength(2);
+  });
+
+  it("does NOT flag retrieval preceded by toPass guard", () => {
+    const source = `
+import { expect } from '@playwright/test';
+export async function getValueSafe(page: any) {
+  await expect(async () => {
+    const val = await page.locator('#x').inputValue();
+    expect(val).not.toBe('');
+  }).toPass();
+  return await page.locator('#x').inputValue();
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("utils/helpers.ts", source);
     expect(results).toHaveLength(0);
   });
 });

@@ -143,7 +143,7 @@ describe("calculateRiskScore (density normalization)", () => {
     expect(result.densityInfo!.effectiveTestFiles).toBe(100);
     expect(result.densityInfo!.findingDensity).toBe(0.05);
     expect(result.densityInfo!.densityFactor).toBeGreaterThanOrEqual(1.0);
-    expect(result.densityInfo!.densityFactor).toBeLessThanOrEqual(3.5);
+    expect(result.densityInfo!.densityFactor).toBeLessThanOrEqual(4.0);
   });
 
   it("larger suites get higher density factors", () => {
@@ -180,14 +180,14 @@ describe("calculateRiskScore (density normalization)", () => {
     expect(result.densityInfo).toBeUndefined();
   });
 
-  it("caps densityFactor at 3.5 for very large suites", () => {
-    const result = calculateRiskScore(fiveHighFlakes, { testFiles: 10000 });
+  it("caps densityFactor at 4.0 for very large suites", () => {
+    const result = calculateRiskScore(fiveHighFlakes, { testFiles: 100000 });
     expect(result.densityInfo).toBeDefined();
-    expect(result.densityInfo!.densityFactor).toBe(3.5);
+    expect(result.densityInfo!.densityFactor).toBe(4.0);
   });
 
   it("has densityFactor of 1.0 at 50 test files (neutral point)", () => {
-    // 50 files is the neutral point: factor = 1.0 + 0.5 * log2(50/50) = 1.0
+    // 50 files is the neutral point: factor = 1.0 + 0.3 * log2(50/50) = 1.0
     const result = calculateRiskScore(fiveHighFlakes, { testFiles: 50 });
     // At exactly 50 files, factor = 1.0 which means no adjustment → densityInfo not emitted
     const withoutInv = calculateRiskScore(fiveHighFlakes);
@@ -226,6 +226,21 @@ describe("calculateRiskScore (density normalization)", () => {
     for (let i = 1; i < scores.length; i++) {
       expect(scores[i]).toBeGreaterThan(scores[i - 1]);
     }
+  });
+
+  it("uses totalOccurrences instead of evidence.length when present", () => {
+    // Simulate a finding with 25 evidence items but 127 total occurrences
+    const capped: Finding = {
+      ...makeFinding("PW-FLAKE-001", "high", 25),
+      totalOccurrences: 127,
+    };
+    const uncapped = makeFinding("PW-FLAKE-001", "high", 25);
+
+    const scoreCapped = calculateRiskScore([capped]).riskScore;
+    const scoreUncapped = calculateRiskScore([uncapped]).riskScore;
+
+    // 127 occurrences should produce a lower health score than 25
+    expect(scoreCapped).toBeLessThan(scoreUncapped);
   });
 
   it("real-world scenario: large sparse suite scores better than small dense suite", () => {

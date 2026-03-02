@@ -1,6 +1,6 @@
 You are working on Repo Audit Agent (Scantrix), a TypeScript‑based static analysis tool that audits Playwright, Cypress, and Selenium automation repositories and their CI pipelines.
 
-**Version:** 5.2.2
+**Version:** 6.3.0
 
 Your goals:
 

@@ -17,6 +17,12 @@ import {
   findCustomAssertionWrappers,
   findManualContextInTestBodies,
   findTestDataMutations,
+  findMissingPlaywrightAwaits,
+  findUnguardedRetrievalMethods,
+  findUnguardedRetrievalMethodsInFunctions,
+  findSleepWrapperExports,
+  findDisguisedHardWaitCalls,
+  findClassSleepMethodExports,
 } from "./astRuleHelpers";
 
 export type Evidence = { file: string; line: number; snippet: string };
@@ -28,6 +34,10 @@ export type Finding = {
   description: string;
   recommendation: string;
   evidence: Evidence[];
+  /** True total occurrences found (before evidence slicing for report brevity). */
+  totalOccurrences?: number;
+  /** True total affected files (before evidence slicing). */
+  affectedFiles?: number;
 };
 
 export type Inventory = {
@@ -284,18 +294,17 @@ type Rule = {
 const RULES: Rule[] = [
   {
     id: "PW-FLAKE-001",
-    title: "Hard waits or debug pauses detected (waitForTimeout / setTimeout / page.pause)",
+    title: "Hard waits detected (waitForTimeout / setTimeout)",
     severity: "high",
     description:
-      "Hard waits increase flakiness and slow tests. page.pause() is a debug-only method that halts execution and opens the Playwright Inspector — it must be removed before committing.",
+      "Hard waits increase flakiness and slow tests. They introduce non-deterministic delays that mask timing bugs and inflate CI run times.",
     recommendation:
-      "Replace hard waits with Playwright auto-waiting + explicit expect(). Remove all page.pause() calls before merging.\nhttps://playwright.dev/docs/api/class-page#page-wait-for-timeout",
+      "Replace hard waits with Playwright auto-waiting + explicit expect().\nhttps://playwright.dev/docs/api/class-page#page-wait-for-timeout",
     patterns: [
       /waitForTimeout\s*\(/g,
       /\bsetTimeout\s*\(/g,
       /new\s+Promise\s*\(\s*resolve\s*=>\s*setTimeout/g,
       /new\s+Promise\s*\(\s*r\s*=>\s*setTimeout/g,
-      /\.pause\s*\(\s*\)/g,
     ],
     // Focus on test files and POMs - exclude helper utilities where delays may be legitimate
     fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js", "**/POMs/**/*.ts", "**/pages/**/*.ts", "**/fixtures/**/*.ts"],
@@ -365,16 +374,17 @@ const RULES: Rule[] = [
   },
   {
     id: "PW-FLAKE-003",
-    title: "test.only() or test.skip() left in codebase",
+    title: "test.only(), test.skip(), or test.describe.skip() left in codebase",
     severity: "high" as const,
     description:
-      "test.only() silently runs only one test — CI pass rates become meaningless. test.skip() permanently disables tests without visibility. Both erode suite coverage.",
+      "test.only() silently runs only one test — CI pass rates become meaningless. test.skip() and test.describe.skip() permanently disable tests without visibility. All erode suite coverage.",
     recommendation:
-      "Remove test.only() before merging. Replace test.skip() with test.fixme() (appears in reports) or use grep/tag-based filtering for selective execution.\nhttps://playwright.dev/docs/test-annotations#skip-a-test",
+      "Remove test.only() before merging. Replace test.skip()/test.describe.skip() with test.fixme() (appears in reports) or use grep/tag-based filtering for selective execution.\nhttps://playwright.dev/docs/test-annotations#skip-a-test",
     patterns: [
       /\btest\.only\s*\(/g,
       /\btest\.describe\.only\s*\(/g,
       /\btest\.skip\s*\(\s*['"`]/g,
+      /\btest\.describe\.skip\s*\(/g,
     ],
     fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js"],
     maxEvidence: 25,
@@ -577,18 +587,34 @@ const RULES: Rule[] = [
   },
   {
     id: "PW-FLAKE-006",
-    title: "test.fixme() markers indicate deferred broken tests",
+    title: "test.fixme() or test.describe.fixme() markers indicate deferred broken tests",
     severity: "low",
     description:
-      "test.fixme() marks a test as 'known to fail' so Playwright skips it. While better than test.skip() for visibility, accumulated fixme markers indicate growing technical debt in the test suite.  *Note - tests marked with test.fixme() are not assessed in this audit.",
+      "test.fixme() and test.describe.fixme() mark tests as 'known to fail' so Playwright skips them. While better than test.skip() for visibility, accumulated fixme markers indicate growing technical debt in the test suite.  *Note - tests marked with test.fixme() are not assessed in this audit.",
     recommendation:
-      "Track test.fixme() tests in your backlog and aim to fix or remove them periodically. If a test has been test.fixme'd for a long time, consider whether it's still relevant.\nhttps://playwright.dev/docs/api/class-test#test-fixme-1",
+      "Track test.fixme()/test.describe.fixme() tests in your backlog and aim to fix or remove them periodically. If a test has been fixme'd for a long time, consider whether it's still relevant.\nhttps://playwright.dev/docs/api/class-test#test-fixme-1",
     patterns: [
       /\btest\.fixme\s*\(/g,
+      /\btest\.describe\.fixme\s*\(/g,
     ],
     fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js"],
     maxEvidence: 25,
   },
+  {
+    id: "PW-FLAKE-009",
+    title: "Debug pause left in code (page.pause)",
+    severity: "high",
+    description:
+      "page.pause() halts test execution and opens the Playwright Inspector. It is a debug-only method that must be removed before committing — any test containing it will hang indefinitely in CI.",
+    recommendation:
+      "Remove all page.pause() calls. Use Playwright's trace viewer or --debug flag for local debugging instead.\nhttps://playwright.dev/docs/debug",
+    patterns: [/\.pause\s*\(\s*\)/g],
+    fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js",
+                "**/POMs/**/*.ts", "**/pages/**/*.ts", "**/fixtures/**/*.ts"],
+    maxEvidence: 25,
+    testContentOnly: true,
+  },
+  // PW-FLAKE-010 moved to AST-based detection (see combined AST loop below)
   {
     id: "PW-DEPREC-007",
     title: "Deprecated page.type() / locator.type() usage",
@@ -889,6 +915,8 @@ function isLikelyFalsePositive(lines: string[], lineIdx: number, ruleId: string)
     if (/\[[\w-]+\$=/.test(line)) return true;
   }
 
+  // PW-FLAKE-010 suppression removed — now handled by AST-based detection
+
   // PW-DEPREC-003: Suppress waitForSelector inside page.evaluate() or when followed by
   // a comment indicating intentional legacy usage
   if (ruleId === "PW-DEPREC-003") {
@@ -915,13 +943,13 @@ async function collectEvidence(
     let m: RegExpExecArray | null;
     while ((m = pat.exec(content)) !== null) {
       const line = lineNumberAtIndex(content, m.index);
-      
+
       // Skip false positives based on context
       if (ruleId && isLikelyFalsePositive(lines, line - 1, ruleId)) {
         if (m.index === pat.lastIndex) pat.lastIndex++;
         continue;
       }
-      
+
       evidence.push({
         file,
         line,
@@ -933,6 +961,30 @@ async function collectEvidence(
   }
 
   return evidence;
+}
+
+/** Count pattern matches in a file without building evidence (used for totalOccurrences). */
+function countMatches(
+  content: string,
+  patterns: RegExp[],
+  ruleId?: string
+): number {
+  let count = 0;
+  const lines = content.split(/\r?\n/);
+  for (const pat of patterns) {
+    pat.lastIndex = 0;
+    let m: RegExpExecArray | null;
+    while ((m = pat.exec(content)) !== null) {
+      const line = lineNumberAtIndex(content, m.index);
+      if (ruleId && isLikelyFalsePositive(lines, line - 1, ruleId)) {
+        if (m.index === pat.lastIndex) pat.lastIndex++;
+        continue;
+      }
+      count++;
+      if (m.index === pat.lastIndex) pat.lastIndex++;
+    }
+  }
+  return count;
 }
 
 function hasFinding(findings: Finding[], id: string) {
@@ -1222,8 +1274,8 @@ function findBrowserResourceLeaks(filePath: string, content: string): ResourceLe
   const results: ResourceLeakResult[] = [];
 
   // Skip files that only use fixture destructuring (auto-cleanup)
-  if (/test\s*\([^)]*,\s*async\s*\(\s*\{[^}]*\b(?:page|browser|context)\b/.test(content) &&
-      !/chromium\.launch|firefox\.launch|webkit\.launch|browser\.newContext\(|browser\.newPage\(|context\.newPage\(/.test(content)) {
+  if (/test\s*\([^)]*,\s*async\s*\(\s*\{[^}]*\b(?:page|browser|context|request)\b/.test(content) &&
+      !/chromium\.launch|firefox\.launch|webkit\.launch|browser\.newContext\(|browser\.newPage\(|context\.newPage\(|request\.newContext\(/.test(content)) {
     return results;
   }
 
@@ -1232,12 +1284,14 @@ function findBrowserResourceLeaks(filePath: string, content: string): ResourceLe
     /\bbrowser\.newContext\s*\(/g,
     /\bbrowser\.newPage\s*\(/g,
     /\bcontext\.newPage\s*\(/g,
+    /\brequest\.newContext\s*\(/g,
   ];
 
   const cleanupPatterns = [
     /\bbrowser\.close\s*\(/,
     /\bcontext\.close\s*\(/,
     /\bpage\.close\s*\(/,
+    /\.dispose\s*\(/,
   ];
 
   const hookPattern = /\b(?:afterEach|afterAll|test\.afterEach|test\.afterAll)\s*\(/;
@@ -1271,7 +1325,7 @@ function findBrowserResourceLeaks(filePath: string, content: string): ResourceLe
     let am: RegExpExecArray | null;
     while ((am = resourceAssignRe.exec(content)) !== null) {
       const varName = am[1];
-      const closeRe = new RegExp(`\\b${varName}\\??\\s*\\.\\s*close\\s*\\(`);
+      const closeRe = new RegExp(`\\b${varName}\\??\\s*\\.\\s*(?:close|dispose)\\s*\\(`);
       if (closeRe.test(content)) {
         hasVarCleanup = true;
         break;
@@ -1753,22 +1807,42 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     const scopedFiles = targetFiles.filter((f) => !isIgnored(f));
     let evidence: Evidence[] = [];
     const max = rule.maxEvidence ?? 20;
+    let totalOccurrences = 0;
+    const affectedFileSet = new Set<string>();
 
     for (const f of scopedFiles) {
-      if (evidence.length >= max) break;
       const content = await fs.readFile(f, "utf8");
-      // Skip test.fixme files for all rules except PW-FLAKE-006
-      if (rule.id !== "PW-FLAKE-006" && /\btest\.fixme\s*\(/.test(content)) continue;
+      // Skip test.fixme/test.describe.fixme files for all rules except PW-FLAKE-006
+      if (rule.id !== "PW-FLAKE-006" && /\btest\.(?:describe\.)?fixme\s*\(/.test(content)) continue;
       // Skip non-test files for rules that only target test content
       if (rule.testContentOnly && !hasTestContent(content)) continue;
-      const ev = await collectEvidence(
-        normalize(f),
-        content,
-        rule.patterns,
-        max - evidence.length,
-        rule.id
-      );
-      evidence = evidence.concat(ev);
+
+      if (evidence.length < max) {
+        const ev = await collectEvidence(
+          normalize(f),
+          content,
+          rule.patterns,
+          max - evidence.length,
+          rule.id
+        );
+        if (ev.length) {
+          evidence = evidence.concat(ev);
+          totalOccurrences += ev.length;
+          affectedFileSet.add(normalize(f));
+          // If evidence filled up mid-file, count remaining matches in this file
+          if (evidence.length >= max) {
+            const remaining = countMatches(content, rule.patterns, rule.id) - ev.length;
+            if (remaining > 0) totalOccurrences += remaining;
+          }
+        }
+      } else {
+        // Evidence cap reached — count only
+        const fileCount = countMatches(content, rule.patterns, rule.id);
+        if (fileCount > 0) {
+          totalOccurrences += fileCount;
+          affectedFileSet.add(normalize(f));
+        }
+      }
     }
 
     if (evidence.length) {
@@ -1779,6 +1853,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         description: rule.description,
         recommendation: rule.recommendation,
         evidence,
+        totalOccurrences,
+        affectedFiles: affectedFileSet.size,
       });
     }
   }
@@ -1890,7 +1966,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   for (const f of filteredTestFiles) {
     try {
       const content = await fs.readFile(f, "utf8");
-      if (/\btest\.fixme\s*\(/.test(content)) {
+      if (/\btest\.(?:describe\.)?fixme\s*\(/.test(content)) {
         fixmeFileSet.add(f);
       }
     } catch { /* skip unreadable */ }
@@ -1989,6 +2065,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       recommendation:
         "Move UI setup and navigation that relies on the test 'page' into test.beforeEach(). Reserve test.beforeAll() for external setup that does not depend on the page fixture (e.g., API calls). If you truly need one-time UI setup, create your own context/page via the 'browser' fixture in beforeAll and close it in afterAll. \nhttps://playwright.dev/docs/api/class-test#test-before-all",
       evidence: beforeAllUsesPage.slice(0, 25),
+      totalOccurrences: beforeAllUsesPage.length,
+      affectedFiles: new Set(beforeAllUsesPage.map(e => e.file)).size,
     });
   }
 
@@ -2020,9 +2098,11 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           line: 1,
           snippet: `${testCount} tests, no lifecycle hooks at all`,
         })),
+        totalOccurrences: filesNoHooksAtAll.length,
+        affectedFiles: filesNoHooksAtAll.length,
       });
     }
-    
+
     // Medium-risk: files with beforeAll/afterAll but no beforeEach/afterEach (only if many such files)
     if (filesOnlyBeforeAfterAll.length >= 3) {
       const topFiles = filesOnlyBeforeAfterAll
@@ -2042,6 +2122,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           line: 1,
           snippet: `${testCount} tests with beforeAll/afterAll only`,
         })),
+        totalOccurrences: filesOnlyBeforeAfterAll.length,
+        affectedFiles: filesOnlyBeforeAfterAll.length,
       });
     }
   }
@@ -2065,6 +2147,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `${testCount} tests with no test.describe() organization`,
       })),
+      totalOccurrences: filesWithoutOrganization.length,
+      affectedFiles: filesWithoutOrganization.length,
     });
   }
 
@@ -2118,6 +2202,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `${testCount} tests but only ${assertionCount} assertion(s)`,
       })),
+      totalOccurrences: testsWithoutAssertions.length,
+      affectedFiles: new Set(testsWithoutAssertions.map(t => t.file)).size,
     });
   }
 
@@ -2140,16 +2226,18 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     findings.push({
       findingId: "PW-STABILITY-005",
       severity: "medium",
-      title: "Browser resource leak risk",
+      title: "Browser/request resource leak risk",
       description:
-        `${resourceLeakEvidence.length} test file(s) manually create browser/context/page resources without proper cleanup in afterEach/afterAll hooks. This can leak browser processes, cause memory pressure, and leave zombie processes on CI runners.`,
+        `${resourceLeakEvidence.length} test file(s) manually create browser/context/page/request resources without proper cleanup in afterEach/afterAll hooks. This can leak browser processes and API connections, cause memory pressure, and leave zombie processes on CI runners.`,
       recommendation:
-        "Either use Playwright's built-in fixtures (({ page }) => ...) which auto-cleanup, or add explicit browser.close()/context.close()/page.close() calls inside afterEach/afterAll hooks.",
+        "Either use Playwright's built-in fixtures (({ page, request }) => ...) which auto-cleanup, or add explicit browser.close()/context.close()/page.close()/requestContext.dispose() calls inside afterEach/afterAll hooks.",
       evidence: resourceLeakEvidence.slice(0, 10).map((r) => ({
         file: r.file,
         line: r.line,
         snippet: `Manual resource creation: ${r.creationPatterns.join(", ")} — no cleanup in afterEach/afterAll`,
       })),
+      totalOccurrences: resourceLeakEvidence.length,
+      affectedFiles: new Set(resourceLeakEvidence.map(r => r.file)).size,
     });
   }
 
@@ -2202,6 +2290,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           line: r.line,
           snippet: `WebDriver creation: ${r.creationPatterns.join(", ")} — no quit() in teardown`,
         })),
+        totalOccurrences: seleniumLeakEvidence.length,
+        affectedFiles: new Set(seleniumLeakEvidence.map(r => r.file)).size,
       });
     }
   }
@@ -2240,16 +2330,56 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: t.line,
         snippet: `"${t.testName}" — ${t.assertionCount} assertions (threshold: 5)`,
       })),
+      totalOccurrences: allOverAsserted.length,
+      affectedFiles: new Set(allOverAsserted.map(t => t.file)).size,
     });
   }
 
+  // ── PW-FLAKE-001 pre-scan: discover all sleep wrappers globally ──
+  const NON_TEST_FILE_CAP = 500;
+  const SLEEP_PREFILTER_RE = /setTimeout|waitForTimeout|waitForNetworkIdle|waitForLoadState/;
+
+  const allSourceFiles = (await fg(["**/*.{ts,js}"], {
+    cwd: repoPath, absolute: true, dot: true, onlyFiles: true,
+    followSymbolicLinks: false,
+    ignore: ["**/node_modules/**", "**/dist/**", "**/build/**", "**/.git/**",
+             "**/playwright-report/**", "**/test-results/**", "**/coverage/**"],
+  })) as string[];
+
+  const nonTestSourceFiles = allSourceFiles
+    .filter((f) => !isIgnored(f) && !f.includes(".spec.") && !f.includes(".test."))
+    .slice(0, NON_TEST_FILE_CAP);
+
+  const globalWrapperNames = new Map<string, string>();     // funcName → relPath
+  const globalSleepMethodNames = new Map<string, string>(); // methodName → relPath
+
+  for (const srcFile of nonTestSourceFiles) {
+    try {
+      const content = await fs.readFile(srcFile, "utf8");
+      if (!SLEEP_PREFILTER_RE.test(content)) continue;
+      const relPath = normalize(srcFile);
+
+      for (const name of findSleepWrapperExports(srcFile, content)) {
+        globalWrapperNames.set(name, relPath);
+      }
+      for (const cls of findClassSleepMethodExports(srcFile, content)) {
+        for (const method of cls.methodNames) {
+          globalSleepMethodNames.set(method, relPath);
+        }
+      }
+    } catch { continue; }
+  }
+
   // ============================================
-  // PW-STABILITY-007 + PW-FLAKE-007 + PW-STABILITY-008 (AST-based)
-  // Combined loop: read each file once, run all 3 AST analyses
+  // PW-STABILITY-007 + PW-FLAKE-007 + PW-STABILITY-008 + PW-FLAKE-010 + PW-FLAKE-001 disguised waits (AST-based)
+  // Combined loop: read each file once, run all AST analyses
   // ============================================
   const allShadowing: Array<{ file: string; evidence: string }> = [];
   const allCustomAssertions: Array<{ file: string; evidence: string }> = [];
   const allManualContexts: Array<{ file: string; line: number; evidence: string }> = [];
+  const allMissingAwaits: Array<{ file: string; line: number; evidence: string }> = [];
+  const allUnguardedRetrievals: Array<{ file: string; line: number; evidence: string }> = [];
+  const allDisguisedWaits: Array<{ file: string; line: number; evidence: string }> = [];
 
   for (const testFile of nonFixmeTestFiles.slice(0, 200)) {
     try {
@@ -2274,14 +2404,48 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         });
       }
 
-      // PW-STABILITY-008: Manual browser context in test bodies
+      // PW-STABILITY-008: Manual browser/request context in test bodies
       const contexts = findManualContextInTestBodies(testFile, content);
       for (const c of contexts) {
         allManualContexts.push({
           file: relFile,
           line: c.line,
-          evidence: `Test '${c.testName}' creates ${c.count} browser context(s) manually — use fixtures for automatic lifecycle`,
+          evidence: `Test '${c.testName}' creates ${c.count} context(s) manually — use fixtures for automatic lifecycle`,
         });
+      }
+
+      // PW-FLAKE-008: Missing await on async Playwright APIs
+      const missingAwaits = findMissingPlaywrightAwaits(testFile, content);
+      for (const m of missingAwaits) {
+        allMissingAwaits.push({
+          file: relFile,
+          line: m.line,
+          evidence: `Test '${m.testName}': unawaited ${m.snippet}`,
+        });
+      }
+
+      // PW-FLAKE-010: Unguarded retrieval methods
+      const unguarded = findUnguardedRetrievalMethods(testFile, content);
+      for (const u of unguarded) {
+        allUnguardedRetrievals.push({
+          file: relFile,
+          line: u.line,
+          evidence: `Test '${u.testName}': ${u.snippet} without preceding content guard`,
+        });
+      }
+
+      // PW-FLAKE-001: Disguised hard wait detection (global name scan)
+      if (globalWrapperNames.size > 0 || globalSleepMethodNames.size > 0) {
+        const disguisedCalls = findDisguisedHardWaitCalls(
+          testFile, content, globalWrapperNames, globalSleepMethodNames,
+        );
+        for (const d of disguisedCalls) {
+          allDisguisedWaits.push({
+            file: relFile,
+            line: d.line,
+            evidence: `Disguised hard wait: ${d.calledFunction}() is a sleep wrapper defined in '${d.importPath}'`,
+          });
+        }
       }
     } catch {
       continue;
@@ -2302,6 +2466,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: s.evidence,
       })),
+      totalOccurrences: allShadowing.length,
+      affectedFiles: new Set(allShadowing.map(s => s.file)).size,
     });
   }
 
@@ -2319,6 +2485,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: a.evidence,
       })),
+      totalOccurrences: allCustomAssertions.length,
+      affectedFiles: new Set(allCustomAssertions.map(a => a.file)).size,
     });
   }
 
@@ -2326,17 +2494,108 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     findings.push({
       findingId: "PW-STABILITY-008",
       severity: "medium",
-      title: "Manual browser.newContext() in test bodies instead of fixtures",
+      title: "Manual browser.newContext()/request.newContext() in test bodies instead of fixtures",
       description:
-        `${allManualContexts.length} test(s) manually create browser context(s) via browser.newContext(). Manual lifecycle management is fragile and can leave contexts unclosed on test failures (context is inaccessible in afterEach/afterAll if declared inside the test), causing resource leaks and port exhaustion.`,
+        `${allManualContexts.length} test(s) manually create browser or request context(s) via browser.newContext()/request.newContext(). Manual lifecycle management is fragile and can leave contexts unclosed or undisposed on test failures (context is inaccessible in afterEach/afterAll if declared inside the test), causing resource leaks, connection exhaustion, and port exhaustion.`,
       recommendation:
-        "Use Playwright fixtures (test.extend) to manage browser contexts. Fixtures automatically handle setup and teardown, even when tests fail. For multi-context scenarios, create a custom fixture that provides pre-configured contexts.\nhttps://playwright.dev/docs/test-fixtures",
+        "Use Playwright fixtures (test.extend) to manage browser and request contexts. Fixtures automatically handle setup and teardown, even when tests fail. For multi-context scenarios, create a custom fixture that provides pre-configured contexts. For API request contexts, use the built-in request fixture or dispose manually in afterEach/afterAll.\nhttps://playwright.dev/docs/test-fixtures\nhttps://playwright.dev/docs/api-testing",
       evidence: allManualContexts.slice(0, 10).map((c) => ({
         file: c.file,
         line: c.line,
         snippet: c.evidence,
       })),
+      totalOccurrences: allManualContexts.length,
+      affectedFiles: new Set(allManualContexts.map(c => c.file)).size,
     });
+  }
+
+  if (allMissingAwaits.length > 0) {
+    findings.push({
+      findingId: "PW-FLAKE-008",
+      severity: "high",
+      title: "Missing await on async Playwright assertions or operations",
+      description:
+        `${allMissingAwaits.length} async Playwright call(s) are not awaited. Unawaited expect() matchers, expect.poll(), and test.step() silently resolve as fire-and-forget promises — the assertion never blocks the test flow, causing false passes or non-deterministic failures.`,
+      recommendation:
+        "Add `await` before every async Playwright assertion and operation. All Playwright expect() matchers (toBeVisible, toHaveText, etc.), expect.poll(), expect.soft() matchers, and test.step() return promises that must be awaited.\nhttps://playwright.dev/docs/test-assertions",
+      evidence: allMissingAwaits.slice(0, 10).map((m) => ({
+        file: m.file,
+        line: m.line,
+        snippet: m.evidence,
+      })),
+      totalOccurrences: allMissingAwaits.length,
+      affectedFiles: new Set(allMissingAwaits.map(m => m.file)).size,
+    });
+  }
+
+  if (allUnguardedRetrievals.length > 0) {
+    if (!options.auditConfig || !isRuleDisabled(options.auditConfig, "PW-FLAKE-010")) {
+      findings.push({
+        findingId: "PW-FLAKE-010",
+        severity: options.auditConfig
+          ? getEffectiveSeverity(options.auditConfig, "PW-FLAKE-010", "medium")
+          : "medium",
+        title: "Retrieval methods used without content guard",
+        description:
+          "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
+          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+          "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.",
+        recommendation:
+          "Guard retrieval calls with a web-first assertion or custom poll before extracting text.\n" +
+          "This assertion specifically waits for the content to be ready, preventing retrieval methods from returning an empty string\n" +
+          "  await expect(locator).not.toHaveText('');\n" +
+          "  const text = await locator.innerText();\n" +
+          "Or use expect().toPass() for custom polling:\n" +
+          "  let text = '';\n" +
+          "  await expect(async () => { text = (await locator.innerText()).trim(); expect(text).not.toBe(''); }).toPass();\n" +
+          "https://playwright.dev/docs/actionability",
+        evidence: allUnguardedRetrievals.slice(0, 25).map((u) => ({
+          file: u.file,
+          line: u.line,
+          snippet: u.evidence,
+        })),
+        totalOccurrences: allUnguardedRetrievals.length,
+        affectedFiles: new Set(allUnguardedRetrievals.map(u => u.file)).size,
+      });
+    }
+  }
+
+  // Merge disguised hard wait evidence into PW-FLAKE-001
+  if (allDisguisedWaits.length > 0) {
+    const existingFlake001 = findings.find((f) => f.findingId === "PW-FLAKE-001");
+    const disguisedEvidence = allDisguisedWaits.map((d) => ({
+      file: d.file,
+      line: d.line,
+      snippet: d.evidence,
+    }));
+
+    if (existingFlake001) {
+      const remaining = 25 - existingFlake001.evidence.length;
+      if (remaining > 0) {
+        existingFlake001.evidence.push(...disguisedEvidence.slice(0, remaining));
+      }
+      // Update counts to include disguised waits
+      existingFlake001.totalOccurrences = (existingFlake001.totalOccurrences ?? existingFlake001.evidence.length) + allDisguisedWaits.length;
+      existingFlake001.affectedFiles = new Set([
+        ...existingFlake001.evidence.map(e => e.file),
+        ...allDisguisedWaits.map(d => d.file),
+      ]).size;
+    } else if (!options.auditConfig || !isRuleDisabled(options.auditConfig, "PW-FLAKE-001")) {
+      findings.push({
+        findingId: "PW-FLAKE-001",
+        severity: options.auditConfig
+          ? getEffectiveSeverity(options.auditConfig, "PW-FLAKE-001", "high")
+          : "high",
+        title: "Hard waits or debug pauses detected (waitForTimeout / setTimeout / page.pause)",
+        description:
+          "Hard waits increase flakiness and slow tests. Disguised sleep wrappers imported from utility modules are equivalent to direct waitForTimeout/setTimeout calls.",
+        recommendation:
+          "Replace hard waits with Playwright auto-waiting + explicit expect(). Remove all sleep wrapper utilities and use proper wait strategies.\nhttps://playwright.dev/docs/api/class-page#page-wait-for-timeout",
+        evidence: disguisedEvidence.slice(0, 25),
+        totalOccurrences: allDisguisedWaits.length,
+        affectedFiles: new Set(allDisguisedWaits.map(d => d.file)).size,
+      });
+    }
   }
 
   // ============================================
@@ -2444,6 +2703,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `Largest inline data block: ${largestBlock} lines`,
       })),
+      totalOccurrences: largeInlineDataFiles.length,
+      affectedFiles: largeInlineDataFiles.length,
     });
   }
 
@@ -2489,6 +2750,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       recommendation:
         "Use test.describe(() => { test.use({ ... }) }) to set config for groups of tests, or configure per-project settings in playwright.config.ts. Reserve inline overrides for genuinely exceptional cases.\nhttps://playwright.dev/docs/test-use-options",
       evidence: inlineConfigOverrides.slice(0, 10),
+      totalOccurrences: inlineConfigOverrides.length,
+      affectedFiles: new Set(inlineConfigOverrides.map(e => e.file)).size,
     });
   }
 
@@ -2524,6 +2787,71 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     }
   }
 
+  // PW-FLAKE-010 (continued): Scan POM/page class files for unguarded retrieval methods
+  if (!options.auditConfig || !isRuleDisabled(options.auditConfig, "PW-FLAKE-010")) {
+    const pomRetrievals: Array<{ file: string; line: number; evidence: string }> = [];
+
+    for (const [pomFile, content] of pomContentsMap) {
+      try {
+        const relFile = normalize(pomFile);
+        const hits = findUnguardedRetrievalMethodsInFunctions(pomFile, content);
+        for (const h of hits) {
+          pomRetrievals.push({
+            file: relFile,
+            line: h.line,
+            evidence: `${h.testName}(): ${h.snippet} without preceding content guard`,
+          });
+        }
+      } catch { continue; }
+    }
+
+    if (pomRetrievals.length > 0) {
+      const existing010 = findings.find((f) => f.findingId === "PW-FLAKE-010");
+      const pomEvidence = pomRetrievals.map((p) => ({
+        file: p.file,
+        line: p.line,
+        snippet: p.evidence,
+      }));
+
+      if (existing010) {
+        const remaining = 25 - existing010.evidence.length;
+        if (remaining > 0) {
+          existing010.evidence.push(...pomEvidence.slice(0, remaining));
+        }
+        existing010.totalOccurrences = (existing010.totalOccurrences ?? existing010.evidence.length) + pomRetrievals.length;
+        existing010.affectedFiles = new Set([
+          ...existing010.evidence.map(e => e.file),
+          ...pomRetrievals.map(p => p.file),
+        ]).size;
+        // Refresh description with combined total
+        existing010.description =
+          "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
+          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+          "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.";
+      } else {
+        findings.push({
+          findingId: "PW-FLAKE-010",
+          severity: options.auditConfig
+            ? getEffectiveSeverity(options.auditConfig, "PW-FLAKE-010", "medium")
+            : "medium",
+          title: "Retrieval methods used without content guard",
+          description:
+            "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
+            "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+            "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.",
+          recommendation:
+            "Guard retrieval calls with a web-first assertion or custom poll before extracting text:\n" +
+            "  await expect(locator).not.toHaveText('');\n" +
+            "  const text = await locator.innerText();\n" +
+            "https://playwright.dev/docs/actionability",
+          evidence: pomEvidence.slice(0, 25),
+          totalOccurrences: pomRetrievals.length,
+          affectedFiles: new Set(pomRetrievals.map(p => p.file)).size,
+        });
+      }
+    }
+  }
+
   // ARCH-001: Missing BasePage pattern
   const pomsWithoutBase = pomAnalyses.filter(p => !p.extendsClass);
   
@@ -2546,6 +2874,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           line: 1,
           snippet: `class ${p.className} (no base class)`,
         })),
+        totalOccurrences: pomsWithoutBase.length,
+        affectedFiles: pomsWithoutBase.length,
       });
     }
   }
@@ -2567,6 +2897,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `${p.publicLocatorCount} public locators${p.locatorExamples.length ? `: ${p.locatorExamples.join(', ')}` : ''}`,
       })),
+      totalOccurrences: pomsWithPublicLocators.length,
+      affectedFiles: pomsWithPublicLocators.length,
     });
   }
 
@@ -2599,6 +2931,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `imports: ${c.importsFromTestFiles.join(', ')}`,
       })),
+      totalOccurrences: testCouplingIssues.length,
+      affectedFiles: testCouplingIssues.length,
     });
   }
 
@@ -2642,6 +2976,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `${f.anyTypeCount} 'any' type(s)${f.hasProperTyping ? ' (has some proper typing)' : ' (no test.extend<> typing)'}`,
       })),
+      totalOccurrences: fixturesWithAnyType.length,
+      affectedFiles: fixturesWithAnyType.length,
     });
   }
 
@@ -2685,6 +3021,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: d.line,
         snippet: d.snippet.replace(/(['"`])(?=.*(?:password|secret|key|token))([^'"`]+)\1/gi, '$1[REDACTED]$1'),
       })),
+      totalOccurrences: sensitiveData.length,
+      affectedFiles: new Set(sensitiveData.map(d => d.file)).size,
     });
   }
 
@@ -2702,6 +3040,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: d.line,
         snippet: d.snippet,
       })),
+      totalOccurrences: emailData.length,
+      affectedFiles: new Set(emailData.map(d => d.file)).size,
     });
   }
 
@@ -2791,6 +3131,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           line: m.line,
           snippet: m.snippet,
         })),
+        totalOccurrences: totalMatches,
+        affectedFiles: inlineDataFiles.length,
       });
     }
   }
@@ -2861,6 +3203,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: 1,
         snippet: `${e.genericThrowCount} generic throw(s), no custom error types`,
       })),
+      totalOccurrences: errorAnalyses.length,
+      affectedFiles: errorAnalyses.length,
     });
   }
 
@@ -2899,6 +3243,8 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         line: m.line,
         snippet: m.evidence,
       })),
+      totalOccurrences: allDataMutations.length,
+      affectedFiles: new Set(allDataMutations.map(m => m.file)).size,
     });
   }
 
@@ -2982,12 +3328,14 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     const maxRetries = retriesMatch ? Math.max(...retriesMatch.map(Number)) : 0;
     
     if (maxRetries > 2) {
+      const isHigh = maxRetries >= 5;
       findings.push({
         findingId: "PW-INSIGHT-004",
-        severity: "medium",
+        severity: isHigh ? "high" : "medium",
         title: `Excessive retry count detected (${maxRetries} retries)`,
-        description:
-          `Retries are set to ${maxRetries}, which is higher than the recommended maximum (2). Excessive retries can mask underlying flakiness and make CI runs significantly longer.`,
+        description: isHigh
+          ? `Retries are set to ${maxRetries}, far above the recommended maximum (2). At this level, retries are compensating for systemic test instability — each flaky test can run up to ${maxRetries + 1} times, dramatically inflating CI duration and masking root causes.`
+          : `Retries are set to ${maxRetries}, which is higher than the recommended maximum (2). Excessive retries can mask underlying flakiness and make CI runs significantly longer.`,
         recommendation:
           "Reduce retries to 1-2 maximum. Use retries to handle rare environmental flakiness, not to work around test instability. Prioritize fixing the root cause of flaky tests.",
         evidence: [
@@ -3714,6 +4062,8 @@ const pwUsesWorkersEnv =
           snippet: `retries: ${retriesExpr ?? "unknown"} (amplifies the risk from assertion-free tests above)`,
         },
       ],
+      totalOccurrences: (stability004?.totalOccurrences ?? stability004?.evidence.length ?? 0) + 1,
+      affectedFiles: (stability004?.affectedFiles ?? new Set(stability004?.evidence.map(e => e.file)).size ?? 0) + 1,
     });
   }
 

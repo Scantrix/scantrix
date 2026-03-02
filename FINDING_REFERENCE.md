@@ -5,13 +5,16 @@
 ### Flakiness Findings (PW-FLAKE-*)
 | ID | Title | Severity | Description |
 |---|---|---|---|
-| PW-FLAKE-001 | Hard waits or debug pauses | 🔴 HIGH | `waitForTimeout`, `setTimeout`, `page.pause()` usage |
+| PW-FLAKE-001 | Hard waits detected | 🔴 HIGH | `waitForTimeout`, `setTimeout` usage; includes disguised sleep wrappers imported from utility modules |
 | PW-FLAKE-002 | Force-click usage | 🟡 LOW | `force: true` in clicks (legitimate uses exist, e.g., modal dismiss) |
 | PW-FLAKE-003 | test.only / test.skip detected | 🔴 HIGH | Permanent `test.only()` or `test.skip()` definitions |
 | PW-FLAKE-004 | networkidle usage | 🔴 HIGH | `waitForLoadState('networkidle')` or `waitUntil: 'networkidle'` |
 | PW-FLAKE-005 | Non-retrying assertions | 🔴 HIGH | `expect(await locator.isVisible()).toBe(true)` instead of web-first assertions |
 | PW-FLAKE-006 | test.fixme() markers | 🟡 LOW | `test.fixme()` markers indicate deferred broken tests |
 | PW-FLAKE-007 | Custom assertion wrappers bypass expect() | 🔴 HIGH | Custom functions (compare/assert/verify) used instead of auto-retrying `expect()` |
+| PW-FLAKE-008 | Missing await on async Playwright APIs | 🔴 HIGH | Unawaited `expect()` matchers, `expect.poll()`, `expect.soft()`, or `test.step()` — fire-and-forget promises |
+| PW-FLAKE-009 | Debug pause left in code | 🔴 HIGH | `page.pause()` halts execution and opens Playwright Inspector — hangs indefinitely in CI |
+| PW-FLAKE-010 | Retrieval methods without content guard | 🟠 MEDIUM | `innerText()`, `textContent()`, `innerHTML()`, `inputValue()` — AST-based; scans test callbacks and POM/page class methods |
 
 ### Stability Findings (PW-STABILITY-*)
 | ID | Title | Severity | Description |
@@ -21,10 +24,10 @@
 | PW-STABILITY-002 | Poor test organization | 🟠 MEDIUM | 10+ tests without describe blocks |
 | PW-STABILITY-003 | Page fixture in beforeAll | 🔴 HIGH | `test.beforeAll(async ({ page }) => ...)` usage |
 | PW-STABILITY-004 | Tests without assertions | 🔴 HIGH | expect() calls < 50% of test count |
-| PW-STABILITY-005 | Browser resource leak risk | 🟠 MEDIUM | Manual browser/context/page creation without cleanup in afterEach/afterAll |
+| PW-STABILITY-005 | Browser/request resource leak risk | 🟠 MEDIUM | Manual browser/context/page/request creation without cleanup (.close()/.dispose()) in afterEach/afterAll |
 | PW-STABILITY-006 | Too many assertions per test | 🟡 LOW | >5 expect() calls in a single test body (≥3 tests over threshold) |
 | PW-STABILITY-007 | Variable shadowing between scopes | 🔴 HIGH | `let`/`var` in describe scope shadowed by declaration in nested test/hook |
-| PW-STABILITY-008 | Manual browser.newContext() in tests | 🟠 MEDIUM | `browser.newContext()` in test bodies instead of fixtures |
+| PW-STABILITY-008 | Manual browser/request context in tests | 🟠 MEDIUM | `browser.newContext()` / `request.newContext()` in test bodies instead of fixtures |
 
 ### Locator Findings (PW-LOC-*)
 | ID | Title | Severity | Description |
@@ -46,7 +49,7 @@
 | PW-INSIGHT-001 | Masked flakiness | 🔴 HIGH | Retries enabled + hard waits + force clicks |
 | PW-INSIGHT-002 | Excessive test timeout | 🟠 MEDIUM | timeout > 120000ms (2 minutes) |
 | PW-INSIGHT-003 | Missing timeout config | 🟡 LOW | No expect.timeout or actionTimeout |
-| PW-INSIGHT-004 | Excessive retries | 🟠 MEDIUM | retries > 2 |
+| PW-INSIGHT-004 | Excessive retries | 🟠/🔴 MED/HIGH | retries 3-4 → medium; retries ≥5 → high (systemic instability) |
 | PW-INSIGHT-005 | Missing trace config | 🔴 HIGH | trace = 'off' or not set — best-practices doc explicitly recommends trace |
 | PW-INSIGHT-006 | Missing video config | 🟡 LOW | video = 'off' or not set |
 | PW-INSIGHT-007 | High fixed workers | 🟡 LOW | workers hardcoded > 8 |
@@ -158,7 +161,8 @@
 14. **ARCH-012** - Mutating shared imported data objects breaks parallel execution
 15. **PW-STABILITY-007** - Variable shadowing between scopes causes undefined crashes in hooks
 16. **PW-FLAKE-007** - Custom assertion wrappers bypass Playwright's auto-retrying expect()
-17. **CI-002** - You can't debug failures without HTML reports
+17. **PW-FLAKE-008** - Missing await on async Playwright APIs causes fire-and-forget assertions
+18. **CI-002** - You can't debug failures without HTML reports
 15. **CI-009** - Retries enabled but no artifacts to debug failures
 16. **CI-007** (>500 files) - CI time is likely unbearable
 17. **DEP-002** - Deprecated npm packages may be unmaintained or vulnerable
@@ -1183,6 +1187,32 @@ test('multi-user test', async ({ userPage }) => {
 });
 ```
 
+### Pattern 27b: Add Missing await to Async Playwright APIs (PW-FLAKE-008)
+
+ **Before (unawaited — fire-and-forget promise):**
+```typescript
+test('verify title', async ({ page }) => {
+  await page.goto('/home');
+  expect(page.locator('.title')).toBeVisible(); // BUG: no await!
+  expect(page).toHaveTitle('Home');             // BUG: no await!
+  test.step('verify header', async () => {      // BUG: no await!
+    await expect(page.locator('h1')).toBeVisible();
+  });
+});
+```
+
+ **After (properly awaited):**
+```typescript
+test('verify title', async ({ page }) => {
+  await page.goto('/home');
+  await expect(page.locator('.title')).toBeVisible();
+  await expect(page).toHaveTitle('Home');
+  await test.step('verify header', async () => {
+    await expect(page.locator('h1')).toBeVisible();
+  });
+});
+```
+
 ### Pattern 28: Clone Imported Test Data (ARCH-012)
 
  **Before (mutates shared module object):**
@@ -1219,7 +1249,7 @@ test('create asset', async ({ page }) => {
 
 ## Health Score Interpretation
 
-Scantrix uses a **0–100 health score** where **higher is better**, similar to Google Lighthouse. The score is computed from raw risk points using exponential decay: `healthScore = round(100 × exp(-riskPoints / 80))`.
+Scantrix uses a **0–100 health score** where **higher is better**, similar to Google Lighthouse. The score is computed from raw risk points using exponential decay: `healthScore = round(100 × exp(-riskPoints / 200))`.
 
 | Health Score | Grade | Level | Action |
 |---|---|---|---|
@@ -1240,7 +1270,7 @@ Step 1: Accumulate risk points
     high = 3, medium = 2, low = 1
 
   evidenceMultiplier:
-    min(1 + log₂(evidenceCount), 3.5)   // log-scale, capped at 3.5×
+    max(evidenceCount, 1) ^ 0.6          // power curve — sensitive across full range
 
   categoryMultiplier:
     PW-INSIGHT-* = 1.5×   (correlated findings)
@@ -1251,11 +1281,11 @@ Step 1: Accumulate risk points
 Step 2: Density normalization (when inventory is available)
 
   effectiveTestFiles = testFiles + cypressTestFiles + seleniumTestFiles
-  densityFactor      = clamp(1.0 + 0.5 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 3.5)
-  adjustedLambda     = 80 × densityFactor
+  densityFactor      = clamp(1.0 + 0.3 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 4.0)
+  adjustedLambda     = 200 × densityFactor
 
   Larger suites get a higher λ, so the same risk points yield a better score.
-  ≤50 files → no adjustment, 100 → 1.5×, 200 → 2.0×, 1000 → 2.66×, 3200+ → 3.5× (cap)
+  ≤50 files → no adjustment, 100 → 1.3×, 500 → 2.0×, 1000 → 2.3×, 5000 → 2.9×
   When no inventory is available: densityFactor = 1.0 (no change)
 
 Step 3: Convert to health score
@@ -1268,21 +1298,21 @@ Step 3: Convert to health score
 | Risk Points | Health Score | Grade |
 |---|---|---|
 | 0 | 100 | A |
-| 10 | 88 | A |
-| 20 | 78 | B |
-| 50 | 54 | B |
-| 85 | 35 | C |
-| 120 | 22 | D |
-| 164 | 13 | F |
+| 25 | 88 | A |
+| 50 | 78 | B |
+| 100 | 61 | B |
+| 200 | 37 | D |
+| 300 | 22 | F |
+| 400 | 14 | F |
 
 ### Worked Example
 
 ```
 Findings:
-  - 25 hard waits (PW-FLAKE-001, high):  3 × min(1 + log₂(25), 3.5) × 1.0 = 3 × 3.5 × 1.0 = 10.5
-  - 3 force clicks (PW-FLAKE-002, med):   2 × min(1 + log₂(3), 3.5) × 1.0  = 2 × 2.58 × 1.0 = 5.2
-  - 1 masked flakiness (PW-INSIGHT-001):  3 × 1.0 × 1.5                     = 4.5
+  - 25 hard waits (PW-FLAKE-001, high):  3 × 25^0.6 × 1.0 = 3 × 6.90 × 1.0 = 20.7
+  - 3 force clicks (PW-FLAKE-002, med):   2 × 3^0.6 × 1.0  = 2 × 1.93 × 1.0 = 3.9
+  - 1 masked flakiness (PW-INSIGHT-001):  3 × 1^0.6 × 1.5                     = 4.5
 
-  riskPoints ≈ 20.2
-  healthScore = round(100 × exp(-20.2 / 80)) = round(100 × 0.777) = 78 (Grade B)
+  riskPoints ≈ 29.1
+  healthScore = round(100 × exp(-29.1 / 200)) = round(100 × 0.865) = 86 (Grade A)
 ```

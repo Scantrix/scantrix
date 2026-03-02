@@ -51,14 +51,14 @@ export function isTestScoped(findingId: string): boolean {
  *
  * Examples:
  *   0 risk points → 100 (perfect)
- *   20 risk points → 78
- *   50 risk points → 54
- *   85 risk points → 35
- *   120 risk points → 22
- *   164 risk points → 13
+ *   50 risk points → 78
+ *   100 risk points → 61
+ *   200 risk points → 37
+ *   300 risk points → 22
+ *   400 risk points → 14
  */
 export function riskPointsToHealthScore(riskPoints: number): number {
-  return Math.round(100 * Math.exp(-riskPoints / 80));
+  return Math.round(100 * Math.exp(-riskPoints / 200));
 }
 
 /**
@@ -93,11 +93,11 @@ export function gradeFromHealthScore(
  * 24 findings scattered across 981 test files is a healthier codebase than 18
  * findings concentrated in 105 test files.
  *
- * The density factor scales the decay constant (λ = 80 × factor), meaning
+ * The density factor scales the decay constant (λ = 200 × factor), meaning
  * the same raw risk points produce a higher health score for larger suites.
- * Factor is clamped to [1.0, 3.5] — small suites see no penalty, and the
- * maximum benefit caps at 3.5× (reached at ~3,200 files) to prevent
- * extremely large suites from masking real problems.
+ * Factor is clamped to [1.0, 4.0] — small suites see no penalty, and the
+ * maximum benefit caps at 4.0× to prevent extremely large suites from
+ * masking real problems.
  *
  * Returns a 0–100 health score (higher = better) in the `riskScore` field.
  */
@@ -114,15 +114,18 @@ export function calculateRiskScore(
 
   for (const f of findings) {
     const basePoints = severityScore(f.severity);
-    // Evidence multiplier: log₂ curve with 0.7 scaling coefficient (no hard cap).
-    // log₂ provides natural compression — doubling occurrences adds only 0.7 to the
-    // multiplier — so no single finding can dominate, while every occurrence reduction
-    // is rewarded in the score.
+    // Occurrence multiplier: N^0.6 power curve.
+    // Provides meaningful sensitivity across the full range — fixing 58 of 170
+    // occurrences produces a visible score improvement, unlike log₂ which
+    // compresses too aggressively at high counts.
+    // Uses totalOccurrences (true count) when available, since evidence arrays
+    // are capped for report brevity (typically 10-25 items).
     //
-    //   1 evidence → 1.00    25 evidence → 4.25
-    //   5 evidence → 2.63    50 evidence → 4.95
-    //  10 evidence → 3.32   100 evidence → 5.65
-    const evidenceMultiplier = 1 + 0.7 * Math.log2(Math.max(f.evidence.length, 1));
+    //   1 occurrence → 1.00    25 occurrences → 6.90
+    //   5 occurrences → 2.63   50 occurrences → 10.46
+    //  10 occurrences → 3.98  100 occurrences → 15.85
+    const occurrences = f.totalOccurrences ?? f.evidence.length;
+    const evidenceMultiplier = Math.pow(Math.max(occurrences, 1), 0.6);
 
     let multiplier = 1;
     if (f.findingId.startsWith("PW-INSIGHT-")) multiplier = INSIGHT_MULTIPLIER;
@@ -135,15 +138,16 @@ export function calculateRiskScore(
   // Density normalization: scale the decay constant by suite size.
   // Larger suites get a higher lambda, so the same risk points yield a better score.
   //
-  // densityFactor formula:  1.0 + 0.5 × log₂(effectiveTestFiles / 50)
-  //   50 files  → 1.0 (neutral — no adjustment)
-  //   100 files → 1.5
-  //   200 files → 2.0
-  //   500 files → ~2.16
-  //   1000 files → ~2.66
-  //   3200 files → ~3.5 (cap)
+  // densityFactor formula:  1.0 + 0.3 × log₂(effectiveTestFiles / 50)
+  //   50 files   → 1.0  (neutral — no adjustment)
+  //   100 files  → 1.3
+  //   200 files  → 1.6
+  //   500 files  → ~2.0
+  //   1000 files → ~2.3
+  //   5000 files → ~2.9
   //   < 50 files → 1.0  (floor — never penalize small suites)
-  const BASE_LAMBDA = 80;
+  //   cap at 4.0 (reached only at ~51,000 files)
+  const BASE_LAMBDA = 200;
   let lambda = BASE_LAMBDA;
   let densityInfo: DensityInfo | undefined;
 
@@ -155,8 +159,8 @@ export function calculateRiskScore(
 
     if (effectiveTestFiles > 0) {
       const findingDensity = findings.length / effectiveTestFiles;
-      const rawFactor = 1.0 + 0.5 * Math.log2(Math.max(effectiveTestFiles / 50, 1));
-      const densityFactor = Math.min(3.5, Math.max(1.0, rawFactor));
+      const rawFactor = 1.0 + 0.3 * Math.log2(Math.max(effectiveTestFiles / 50, 1));
+      const densityFactor = Math.min(4.0, Math.max(1.0, rawFactor));
 
       lambda = BASE_LAMBDA * densityFactor;
       densityInfo = {

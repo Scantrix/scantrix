@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Scantrix (repo-audit-agent v5.1.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in minutes.
+Scantrix (repo-audit-agent v6.3.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in minutes.
 
 **CLI Engine** (`src/`) — TypeScript CommonJS compiled to `dist/`. Entry: `src/cli.ts` (subcommands: `scan` default, `init`).
 
@@ -46,13 +46,13 @@ Target Repo → Scanner Engine (50+ rules) → Report Artifacts (md/html/json/sa
 ### Risk Scoring (scoring.ts)
 
 Weighted multipliers: `PW-INSIGHT-*` 1.5x, `CI-*` 1.3x, `ARCH-*` 1.2x.
-Evidence scaling: `1 + 0.7 × log₂(occurrences)` — no hard cap; every occurrence fix moves the score.
+Evidence scaling: `N^0.6` power curve — sensitive across the full range; every occurrence fix moves the score.
 Health score (0–100, higher = better): `round(100 × exp(-riskPoints / λ))`.
 Grades: A (≥80), B (≥60), C (≥40), D (≥25), F (<25).
 
 **Density normalization:** When inventory is available, λ scales with suite size:
-`λ = 80 × clamp(1.0 + 0.5 × log₂(testFiles / 50), 1.0, 3.5)`.
-≤50 files → no adjustment; 100 → 1.5×; 200 → 2.0×; 1,000 → 2.66×; 3,200+ → 3.5× (cap).
+`λ = 200 × clamp(1.0 + 0.3 × log₂(testFiles / 50), 1.0, 4.0)`.
+≤50 files → no adjustment; 100 → 1.3×; 200 → 1.6×; 500 → 2.0×; 1,000 → 2.3×.
 
 ## Testing
 

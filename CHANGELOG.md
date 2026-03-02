@@ -1,5 +1,134 @@
 # Changelog
 
+## [6.3.0] - 2026-03-01
+
+### PW-FLAKE-010: AST-based detection + POM/page class coverage
+
+- **Migrated to AST**: `PW-FLAKE-010` now uses the TypeScript Compiler API instead of regex
+  patterns. The AST approach walks `test()` callback bodies to find retrieval method calls
+  (`.innerText()`, `.textContent()`, `.innerHTML()`, `.inputValue()`, `.allInnerTexts()`,
+  `.allTextContents()`) and checks whether a content guard (`expect().toHaveText()`,
+  `.toContainText()`, `.toBeEmpty()`, or `.toPass()`) precedes them within a 5-statement window.
+- **POM/page class scanning**: Added `findUnguardedRetrievalMethodsInFunctions()` to scan
+  page object classes, utility files, and fixture files for unguarded retrieval calls in
+  function/method bodies. Evidence from POM files is merged into the same finding.
+- **False positive reduction**: Retrieval calls inside nested callbacks (e.g., `expect.poll()`
+  polling lambdas) are no longer flagged. The regex approach could not distinguish these.
+- **Description consistency**: Finding description no longer embeds a stale count from the
+  initial scan phase; `totalOccurrences` and `affectedFiles` are the source of truth.
+
+### PW-INSIGHT-004: Severity escalation for high retry counts
+
+- Retries **3-4** remain **medium** severity.
+- Retries **5+** now escalate to **high** severity with a sharper description highlighting
+  systemic test instability and CI duration inflation.
+
+## [6.2.0] - 2026-03-01
+
+### PW-FLAKE-009: Debug pause detection (page.pause)
+
+- **New finding**: `PW-FLAKE-009` — detects `page.pause()` calls left in test code.
+  Previously bundled under PW-FLAKE-001 (hard waits), debug pauses are fundamentally
+  different: they halt execution entirely and open the Playwright Inspector, hanging
+  indefinitely in CI. Separating them gives teams a clear, actionable finding for
+  debug leftovers.
+- **PW-FLAKE-001 updated**: Title and description narrowed to hard waits only
+  (`waitForTimeout` / `setTimeout`). No longer matches `page.pause()`.
+
+### PW-FLAKE-010: Retrieval method content guard
+
+- **New finding**: `PW-FLAKE-010` — flags `innerText()`, `textContent()`, `allInnerTexts()`,
+  `allTextContents()`, `innerHTML()`, and `inputValue()` calls in test files. These retrieval
+  methods only wait for the element to exist in the DOM, not for content to be populated,
+  which can return empty or stale values with dynamically loaded text.
+
+### Scoring Formula Overhaul
+
+- **Occurrence multiplier**: Changed from `1 + 0.7 × log₂(N)` to `N^0.6` power curve.
+  The log₂ curve compressed too aggressively at high occurrence counts — fixing 58 of 170
+  occurrences (a full day of work) produced zero score change. The N^0.6 curve provides
+  meaningful sensitivity across the full range so every fix is rewarded.
+- **Base lambda (λ)**: Increased from 80 to 200. Combined with the steeper occurrence
+  multiplier, this keeps scores in a reasonable range while improving per-fix sensitivity.
+- **Density coefficient**: Reduced from 0.5 to 0.3. Prevents large suites from inflating
+  lambda too aggressively (previously a 981-file repo got λ=252, absorbing most risk deltas).
+- **Density cap**: Increased from 3.5 to 4.0. The lower coefficient means the cap is reached
+  much later (~51,000 files vs ~3,200), giving more granularity across mid-to-large suites.
+- **`riskPointsToHealthScore` standalone function**: Updated to use λ=200 for consistency.
+
+### PW-FLAKE-001: Global Name Scan (replaces import tracing)
+
+- **Detection overhaul**: Replaced per-file import tracing with a two-phase global scan.
+  Phase 1 pre-scans all non-test source files for sleep wrapper exports. Phase 2 matches
+  call sites in test files by function name alone — no import path resolution needed.
+- This catches wrappers reachable through multiple levels of indirection, path aliases,
+  barrel files, or class composition (e.g., `BaseTest` composing `WaiterHelpers`).
+- Regex pre-filter (`setTimeout|waitForTimeout|waitForNetworkIdle|waitForLoadState`) means
+  only files containing sleep tokens get AST-parsed — most files are skipped after a single
+  string scan.
+- **New patterns**: `waitForNetworkIdle()` and `waitForLoadState('networkidle')` wrappers
+  are now detected as disguised hard waits.
+
+### PW-FLAKE-003: test.describe.skip Detection
+
+- Now detects `test.describe.skip()` in addition to `test.only()` and `test.skip()`.
+
+### PW-FLAKE-006: test.describe.fixme Detection
+
+- Now detects `test.describe.fixme()` in addition to `test.fixme()`.
+- Updated fixme file exclusion filters to also recognize `test.describe.fixme()`.
+
+### Scoring Bug Fixes
+
+- **Evidence capping fix (scoring.ts)**: `calculateRiskScore` now uses `f.totalOccurrences`
+  (true count) instead of `f.evidence.length` (capped at 10-25 items for report brevity).
+- **Evidence capping fix (report.ts)**: Effort estimation, action items, and finding
+  categorization now use true occurrence/file counts instead of capped evidence arrays.
+
+---
+
+## [6.1.0] - 2026-02-28
+
+### PW-FLAKE-001: Disguised Hard Wait Detection
+
+- **Enhanced rule**: PW-FLAKE-001 now traces relative imports in test files to detect sleep
+  wrappers hidden in utility modules. Functions whose body contains
+  `new Promise(... => setTimeout(...))`, `waitForTimeout()`, or direct `setTimeout()` are
+  flagged when called from test files — even with deceptive names like `prepareEnvironment()`.
+- Two-pass AST analysis: extract import bindings → resolve utility modules → find sleep
+  wrapper exports → trace call sites back in the test file.
+- **False-positive filter**: Functions containing a loop (`while`/`for`/`do`) combined with
+  retry-intent identifiers (`retry`, `attempt`, `backoff`, `polling`, `reconnect`) are
+  excluded. This prevents flagging legitimate retry/polling wrappers.
+- Utility file contents and sleep export analysis are cached per file for performance.
+
+### PW-FLAKE-008: Missing `await` on Async Playwright APIs
+
+- **New rule**: AST-based detection of unawaited async Playwright API calls inside `test()`
+  callbacks. Catches `expect()` matchers (`toBeVisible`, `toHaveText`, etc.), `expect.soft()`,
+  `expect.poll()`, and `test.step()` without `await`. These silently become fire-and-forget
+  promises, causing false passes or non-deterministic failures.
+
+### test.fixme File Exclusion
+
+- Files containing `test.fixme()` are now automatically excluded from **all rules except
+  PW-FLAKE-006**. These files represent known-broken tests — flagging other issues (hard waits,
+  missing hooks, force clicks, etc.) in them is noise.
+- Inventory counting (test files, test cases) is unaffected — fixme files are still counted.
+- PW-FLAKE-006 continues to scan fixme files to track tech debt.
+
+### request.newContext() Detection
+
+- **PW-STABILITY-005**: Now detects `request.newContext()` as a resource creation pattern
+  alongside `browser.newContext()`, `browser.newPage()`, and `chromium.launch()`. Also
+  recognizes `.dispose()` as a cleanup method (Playwright's `APIRequestContext` uses
+  `dispose()`, not `close()`). Variable-based cleanup (`apiCtx?.dispose()`) is supported.
+- **PW-STABILITY-008**: AST-based detection now flags `request.newContext()` calls inside
+  `test()` bodies in addition to `browser.newContext()`. Both create resources with manual
+  lifecycle management that should use fixtures instead.
+
+---
+
 ## [6.0.0] - 2026-02-26
 
 ### CLI Isolation for Open Source

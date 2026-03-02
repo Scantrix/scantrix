@@ -927,14 +927,19 @@ function getTopActionItems(findings: ScanResults["findings"]): string[] {
       } else {
         actions.push("Remove hard waits (waitForTimeout/setTimeout)");
       }
+    } else if (f.findingId === "PW-FLAKE-009") {
+      const n = f.totalOccurrences ?? f.evidence.length;
+      actions.push(`Remove ${n} debug pause${n > 1 ? 's' : ''} (page.pause)`);
     } else if (f.findingId === "PW-INSIGHT-001") {
       actions.push("Fix root cause of flaky tests before relying on retries");
     } else if (f.findingId === "PW-INSIGHT-008") {
       actions.push("Enable trace/video capture and publish test artifacts in CI");
     } else if (f.findingId === "PW-STABILITY-001") {
-      actions.push(`Add cleanup hooks to ${f.evidence.length} test file${f.evidence.length > 1 ? 's' : ''}`);
+      const n = f.totalOccurrences ?? f.evidence.length;
+      actions.push(`Add cleanup hooks to ${n} test file${n > 1 ? 's' : ''}`);
     } else if (f.findingId === "PW-STABILITY-003") {
-      actions.push(`Move page-based setup out of beforeAll in ${f.evidence.length} file${f.evidence.length > 1 ? 's' : ''}`);
+      const n = f.totalOccurrences ?? f.evidence.length;
+      actions.push(`Move page-based setup out of beforeAll in ${n} file${n > 1 ? 's' : ''}`);
     } else if (f.findingId === "CI-002") {
       actions.push("Configure Playwright HTML report publishing in CI");
     } else if (f.findingId === "CI-007") {
@@ -942,11 +947,13 @@ function getTopActionItems(findings: ScanResults["findings"]): string[] {
     } else if (f.findingId === "CI-009") {
       actions.push("Publish test-results artifacts to debug retry failures");
     } else if (f.findingId === "ARCH-003") {
-      actions.push(`Extract shared code from ${f.evidence.length} test file${f.evidence.length > 1 ? 's' : ''} to utility modules`);
+      const n = f.totalOccurrences ?? f.evidence.length;
+      actions.push(`Extract shared code from ${n} test file${n > 1 ? 's' : ''} to utility modules`);
     } else if (f.findingId === "ARCH-005") {
       actions.push("Move hardcoded credentials to environment variables");
     } else if (f.findingId === "DEP-002") {
-      actions.push(`Replace ${f.evidence.length} deprecated npm package${f.evidence.length > 1 ? 's' : ''} with supported alternatives`);
+      const n = f.totalOccurrences ?? f.evidence.length;
+      actions.push(`Replace ${n} deprecated npm package${n > 1 ? 's' : ''} with supported alternatives`);
     } else {
       // Generic high-severity action
       actions.push(f.recommendation.split('.')[0]);
@@ -955,16 +962,17 @@ function getTopActionItems(findings: ScanResults["findings"]): string[] {
 
   // Fill remaining slots with medium severity items
   if (actions.length < 3) {
-    const mediumFindings = findings.filter(f => f.severity === "medium").sort((a, b) => b.evidence.length - a.evidence.length);
+    const mediumFindings = findings.filter(f => f.severity === "medium").sort((a, b) => (b.totalOccurrences ?? b.evidence.length) - (a.totalOccurrences ?? a.evidence.length));
     for (const f of mediumFindings) {
       if (actions.length >= 3) break;
+      const n = f.totalOccurrences ?? f.evidence.length;
 
       if (f.findingId === "PW-FLAKE-002" || f.findingId === "CY-FLAKE-003") {
-        actions.push(`Remove ${f.evidence.length} force-click pattern${f.evidence.length > 1 ? 's' : ''}`);
+        actions.push(`Remove ${n} force-click pattern${n > 1 ? 's' : ''}`);
       } else if (f.findingId === "PW-STABILITY-001") {
-        actions.push(`Add cleanup hooks to ${f.evidence.length} test file${f.evidence.length > 1 ? 's' : ''}`);
+        actions.push(`Add cleanup hooks to ${n} test file${n > 1 ? 's' : ''}`);
       } else if (f.findingId === "PW-STABILITY-002") {
-        actions.push(`Organize ${f.evidence.length} test file${f.evidence.length > 1 ? 's' : ''} with describe blocks`);
+        actions.push(`Organize ${n} test file${n > 1 ? 's' : ''} with describe blocks`);
       } else if (f.findingId === "CI-006") {
         actions.push("Standardize WORKERS env across all CI pipelines");
       } else if (f.findingId === "PW-INSIGHT-002") {
@@ -976,7 +984,9 @@ function getTopActionItems(findings: ScanResults["findings"]): string[] {
       } else if (f.findingId === "ARCH-001") {
         actions.push("Create BasePage class for consistent POM patterns");
       } else if (f.findingId === "ARCH-004") {
-        actions.push(`Add proper TypeScript typing to ${f.evidence.length} fixture file${f.evidence.length > 1 ? 's' : ''}`);
+        actions.push(`Add proper TypeScript typing to ${n} fixture file${n > 1 ? 's' : ''}`);
+      } else if (f.findingId === "PW-FLAKE-010") {
+        actions.push(`Guard ${n} retrieval method${n > 1 ? 's' : ''} with web-first assertions`);
       } else {
         actions.push(f.recommendation.split('.')[0]);
       }
@@ -1071,6 +1081,7 @@ function calculateRemediationTime(findings: ScanResults["findings"]): TimeEstima
   // Time estimates per finding type (in hours)
   const timeEstimates: Record<string, { min: number; max: number }> = {
     "PW-FLAKE-001": { min: 1, max: 4 },     // Hard waits
+    "PW-FLAKE-009": { min: 0.25, max: 0.5 },  // Debug pauses - simple removal
     "PW-FLAKE-002": { min: 0.5, max: 2 },   // Force clicks
     "CY-FLAKE-003": { min: 0.5, max: 2 },   // Cypress force clicks
     "PW-LOC-001": { min: 1, max: 4 },       // XPath selectors
@@ -1093,6 +1104,7 @@ function calculateRemediationTime(findings: ScanResults["findings"]): TimeEstima
     "ARCH-007": { min: 2, max: 4 },         // No custom error types
     "ARCH-008": { min: 1, max: 3 },         // Large inline test data
     "ARCH-009": { min: 0.5, max: 2 },       // Inline config overrides
+    "PW-FLAKE-010": { min: 1, max: 3 },     // Retrieval methods - add guards
     "PW-FLAKE-003": { min: 0.5, max: 1 },   // test.only/skip
     "PW-FLAKE-004": { min: 1, max: 3 },     // networkidle
     "PW-STABILITY-004": { min: 2, max: 6 }, // Tests without assertions
@@ -1115,7 +1127,7 @@ function calculateRemediationTime(findings: ScanResults["findings"]): TimeEstima
   for (const f of highSeverity) {
     const estimate = timeEstimates[f.findingId] ?? { min: 1, max: 3 };
     // Scale by file count for larger scope issues
-    const fileCount = new Set(f.evidence.map(e => e.file)).size;
+    const fileCount = f.affectedFiles ?? new Set(f.evidence.map(e => e.file)).size;
     const scale = Math.min(Math.max(1, fileCount / 3), 3); // Cap scaling at 3x
     toGoodMin += estimate.min * scale;
     toGoodMax += estimate.max * scale;
@@ -1124,7 +1136,7 @@ function calculateRemediationTime(findings: ScanResults["findings"]): TimeEstima
   // Calculate total time for all issues
   for (const f of [...highSeverity, ...mediumSeverity, ...lowSeverity]) {
     const estimate = timeEstimates[f.findingId] ?? { min: 1, max: 3 };
-    const fileCount = new Set(f.evidence.map(e => e.file)).size;
+    const fileCount = f.affectedFiles ?? new Set(f.evidence.map(e => e.file)).size;
     const scale = Math.min(Math.max(1, fileCount / 3), 3);
     toAllMin += estimate.min * scale;
     toAllMax += estimate.max * scale;
@@ -1150,8 +1162,8 @@ function categorizeFindings(findings: ScanResults["findings"]): QuickWinCategory
   const largerEfforts: QuickWinCategory["largerEfforts"] = [];
 
   for (const f of findings) {
-    const fileCount = new Set(f.evidence.map(e => e.file)).size;
-    const occurrences = f.evidence.length;
+    const fileCount = f.affectedFiles ?? new Set(f.evidence.map(e => e.file)).size;
+    const occurrences = f.totalOccurrences ?? f.evidence.length;
 
     // Categorize based on finding type and scope
     switch (f.findingId) {
@@ -1200,6 +1212,30 @@ function categorizeFindings(findings: ScanResults["findings"]): QuickWinCategory
             finding: `Remove ${occurrences} hard waits across ${fileCount} files`,
             effort: "4-8 hours",
             impact: "Faster, more stable tests",
+          });
+        }
+        break;
+
+      case "PW-FLAKE-009": // Debug pauses
+        quickWins.push({
+          finding: `Remove ${occurrences} debug pause${occurrences > 1 ? 's' : ''} (page.pause)`,
+          effort: "~15 min",
+          impact: "Prevents CI hangs from leftover debug pauses",
+        });
+        break;
+
+      case "PW-FLAKE-010": // Retrieval methods
+        if (occurrences <= 5) {
+          quickWins.push({
+            finding: `Add content guards to ${occurrences} retrieval method call${occurrences > 1 ? 's' : ''}`,
+            effort: "1-2 hours",
+            impact: "Prevents empty/stale text extraction",
+          });
+        } else {
+          largerEfforts.push({
+            finding: `Add content guards to ${occurrences} retrieval calls across ${fileCount} files`,
+            effort: "3-6 hours",
+            impact: "Prevents empty/stale text extraction",
           });
         }
         break;
@@ -1876,7 +1912,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
 }
 
-function renderFinding(md: string[], f: { findingId: string; severity: string; title: string; description: string; recommendation: string; evidence: Array<{ file: string; line: number; snippet: string }> }) {
+function renderFinding(md: string[], f: { findingId: string; severity: string; title: string; description: string; recommendation: string; evidence: Array<{ file: string; line: number; snippet: string }>; totalOccurrences?: number; affectedFiles?: number }) {
   const category = f.findingId.startsWith("PW-FLAKE") ? "flakiness" :
     f.findingId.startsWith("PW-STABILITY") ? "stability" :
     f.findingId.startsWith("PW-LOC") ? "locators" :
@@ -1918,8 +1954,8 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
     }
   }
 
-  const totalHits = uniqueEvidence.size;
-  const affectedFiles = new Set([...uniqueEvidence.values()].map(e => e.file)).size;
+  const totalHits = f.totalOccurrences ?? uniqueEvidence.size;
+  const affectedFilesCount = f.affectedFiles ?? new Set([...uniqueEvidence.values()].map(e => e.file)).size;
 
   // Merge top affected files inline into Impact line
   const fileHitCounts = new Map<string, number>();
@@ -1930,7 +1966,7 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
     .sort((a, b) => b[1] - a[1])
     .slice(0, 3);
 
-  let impactLine = `**Impact:** ${totalHits} occurrence${totalHits > 1 ? 's' : ''} across ${affectedFiles} file${affectedFiles > 1 ? 's' : ''}`;
+  let impactLine = `**Impact:** ${totalHits} occurrence${totalHits > 1 ? 's' : ''} across ${affectedFilesCount} file${affectedFilesCount > 1 ? 's' : ''}`;
   if (hotspots.length > 0 && !f.findingId.startsWith("CI-")) {
     const fileList = hotspots.map(([file, count]) => {
       const fileName = file.split(/[/\\]/).pop() || file;

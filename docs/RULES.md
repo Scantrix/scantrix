@@ -1,22 +1,35 @@
 # Rules Reference
 
-Complete catalog of all audit rules implemented in Scantrix v5.2.0.
+Complete catalog of all audit rules implemented in Scantrix v6.3.0.
+
+---
+
+## Global Behavior: test.fixme File Exclusion
+
+Files containing `test.fixme()` are known-broken tests. Flagging other issues (hard waits, missing hooks, force clicks, etc.) in these files is noise — the tests are already marked as broken. Scantrix automatically excludes these files from **all rules except PW-FLAKE-006** (which specifically tracks `test.fixme` markers as tech debt).
+
+- **Inventory counting** (test files, test cases) is **not affected** — fixme files are still counted.
+- **Pattern-based rules** (the RULES loop) skip any file whose content contains `test.fixme(`.
+- **Analytical rules** (STABILITY, ARCH, LOC, etc.) iterate a pre-filtered `nonFixmeTestFiles` list.
+- **PW-FLAKE-006** is the only rule that scans fixme files, ensuring tech debt visibility.
 
 ---
 
 ## Flakiness Rules (PW-FLAKE-*)
 
-### PW-FLAKE-001 — Hard waits or debug pauses detected
+### PW-FLAKE-001 — Hard waits detected
 | Property | Value |
 |----------|-------|
 | Severity | **High** |
 | Category | Flakiness |
-| Patterns | `waitForTimeout`, `setTimeout`, promise-based sleep helpers, `page.pause()` |
+| Patterns | `waitForTimeout`, `setTimeout`, promise-based sleep helpers |
 | File Globs | `**/*.spec.*`, `**/*.test.*`, `**/POMs/**/*.ts`, `**/pages/**/*.ts`, `**/fixtures/**/*.ts` |
 
-Hard waits slow tests and hide timing bugs. `page.pause()` is a debug-only method that halts execution and opens the Playwright Inspector — it must be removed before committing.
+Hard waits increase flakiness and slow tests. They introduce non-deterministic delays that mask timing bugs and inflate CI run times.
 
 > **Test content gate:** Files without test framework DSL (no `test()`, `it()`, `describe()`, or page object patterns) are automatically excluded, even when matched by directory globs like `**/fixtures/**`.
+
+> **Disguised wait detection:** Scantrix pre-scans all non-test source files for sleep wrappers, then matches call sites in test files by function name. Functions whose body contains `new Promise(... => setTimeout(...))`, `waitForTimeout()`, `waitForNetworkIdle()`, `waitForLoadState('networkidle')`, or direct `setTimeout()` are flagged when called from test files — even if they have deceptive names like `prepareEnvironment()` or are composed through multiple levels of class inheritance. Retry/polling wrappers (functions with loop structures and retry-intent identifiers) are excluded to avoid false positives.
 
 ### PW-FLAKE-002 — Force-click usage detected
 | Property | Value |
@@ -35,9 +48,9 @@ Force clicks bypass Playwright's actionability checks. While there are legitimat
 |----------|-------|
 | Severity | **High** |
 | Category | Flakiness |
-| Patterns | `test.only(`, `test.describe.only(`, `test.skip('...')` |
+| Patterns | `test.only(`, `test.describe.only(`, `test.skip('...')`, `test.describe.skip(` |
 
-Permanent `test.only()` or `test.skip()` calls reduce coverage. Conditional skips inside test bodies are excluded.
+Permanent `test.only()`, `test.skip()`, or `test.describe.skip()` calls reduce coverage. Conditional skips inside test bodies are excluded.
 
 ### PW-FLAKE-004 — networkidle usage detected
 | Property | Value |
@@ -62,9 +75,9 @@ Non-retrying assertions lead to flaky tests. Prefer Playwright web-first asserti
 |----------|-------|
 | Severity | **Low** |
 | Category | Flakiness |
-| Patterns | `test.fixme(` |
+| Patterns | `test.fixme(`, `test.describe.fixme(` |
 
-`test.fixme()` indicates deferred broken tests and growing test debt.
+`test.fixme()` and `test.describe.fixme()` indicate deferred broken tests and growing test debt.
 
 ### PW-FLAKE-007 — Custom assertion wrappers bypass auto-retrying expect()
 | Property | Value |
@@ -75,6 +88,45 @@ Non-retrying assertions lead to flaky tests. Prefer Playwright web-first asserti
 | Trigger | ≥2 calls to custom assertion function AND (expect count < test count OR custom calls > expect count) |
 
 Custom assertion wrappers (e.g., `compareActualAndExpectedResults()`, `verifyElementState()`) imported from local utility modules do not auto-retry. Playwright's `expect()` matchers automatically retry until the condition is met or the timeout expires, which is essential for async DOM assertions.
+
+### PW-FLAKE-009 — Debug pause left in code (page.pause)
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Flakiness |
+| Patterns | `page.pause()` |
+| File Globs | `**/*.spec.*`, `**/*.test.*`, `**/POMs/**/*.ts`, `**/pages/**/*.ts`, `**/fixtures/**/*.ts` |
+
+`page.pause()` halts test execution and opens the Playwright Inspector. It is a debug-only method that must be removed before committing — any test containing it will hang indefinitely in CI. Use Playwright's trace viewer or `--debug` flag for local debugging instead.
+
+> **Test content gate:** Files without test framework DSL (no `test()`, `it()`, `describe()`, or page object patterns) are automatically excluded, even when matched by directory globs like `**/fixtures/**`.
+
+### PW-FLAKE-010 — Retrieval methods used without content guard
+| Property | Value |
+|----------|-------|
+| Severity | **Medium** |
+| Category | Flakiness |
+| Analysis | AST-based: walks `test()` callback bodies and function/method bodies in page classes |
+| Methods | `.innerText()`, `.textContent()`, `.allInnerTexts()`, `.allTextContents()`, `.innerHTML()`, `.inputValue()` |
+| Scope | Test files (`test()` / `test.only()` callbacks) + POM/page class files (all function/method bodies) |
+
+Retrieval methods only wait for the element to exist in the DOM — not for its content to be populated. This can return empty or stale values when text is loaded dynamically. Guard with web-first assertions or custom polling before extraction.
+
+> **Content guard suppression:** A retrieval call is suppressed when any of the 5 preceding statements in the same function body contains an `expect()` chain ending in `.toHaveText()`, `.toContainText()`, `.toBeEmpty()`, or `.toPass()` (including negated forms like `.not.toHaveText()`).
+
+> **Nested callback exclusion:** Retrieval calls inside nested arrow/function expressions (e.g., `expect.poll(() => loc.textContent())`) are not flagged, as those are intentional polling/assertion contexts.
+
+> **Two-phase scanning:** Phase 1 scans test files via the combined AST loop. Phase 2 scans POM/page class files after POM analysis, merging evidence into a single finding.
+
+### PW-FLAKE-008 — Missing await on async Playwright assertions or operations
+| Property | Value |
+|----------|-------|
+| Severity | **High** |
+| Category | Flakiness |
+| Analysis | AST-based: detects unawaited async Playwright API calls inside `test()` callbacks |
+| Patterns | `expect(locator).toBeVisible()`, `expect.soft(...).<matcher>()`, `expect.poll(...).<matcher>()`, `test.step(...)` without `await` |
+
+Missing `await` on async Playwright APIs is a common, hard-to-debug source of flakiness. The assertion silently becomes a fire-and-forget promise — it never blocks the test, so it may pass when it should fail, or fail non-deterministically. Detects all 28 async matchers from Playwright's `LocatorAssertions`, `PageAssertions`, and `APIResponseAssertions`, including negated forms (`expect(...).not.toBeVisible()`).
 
 ---
 
@@ -124,16 +176,16 @@ Using the `page` fixture in `beforeAll` shares browser state across tests and ca
 
 Tests without assertions never fail and provide no signal. When retries are enabled this is superseded by PW-INSIGHT-011.
 
-### PW-STABILITY-005 — Browser resource leak risk
+### PW-STABILITY-005 — Browser/request resource leak risk
 | Property | Value |
 |----------|-------|
 | Severity | **Medium** |
 | Category | Stability |
-| Patterns | `chromium.launch()`, `browser.newContext()`, `browser.newPage()` without corresponding `.close()` |
+| Patterns | `chromium.launch()`, `browser.newContext()`, `browser.newPage()`, `request.newContext()` without corresponding `.close()` or `.dispose()` |
 
-Manual browser/context/page creation without cleanup in afterEach/afterAll leaks resources. Use Playwright fixtures (({ page })) which auto-cleanup.
+Manual browser/context/page/request creation without cleanup in afterEach/afterAll leaks resources. `APIRequestContext` instances created via `request.newContext()` must be disposed with `.dispose()` — unlike browser contexts which use `.close()`. Use Playwright fixtures (({ page, request })) which auto-cleanup.
 
-> **Variable-based cleanup recognized:** When resources are assigned to variables (e.g., `slPage = await slContext.newPage()`) and those variables are closed in `afterAll`/`afterEach` hooks (e.g., `slPage?.close()`), the rule correctly suppresses the finding. Both literal cleanup (`page.close()`) and variable-based cleanup (`slPage?.close()`) are supported.
+> **Variable-based cleanup recognized:** When resources are assigned to variables (e.g., `slPage = await slContext.newPage()`) and those variables are cleaned up in `afterAll`/`afterEach` hooks (e.g., `slPage?.close()` or `apiCtx?.dispose()`), the rule correctly suppresses the finding. Both literal cleanup (`page.close()`) and variable-based cleanup (`slPage?.close()`, `apiCtx?.dispose()`) are supported.
 
 ### PW-STABILITY-006 — Too many assertions per test
 | Property | Value |
@@ -153,15 +205,15 @@ Tests with excessive assertions verify too many behaviors at once, making failur
 
 Variables declared with `let`/`var` in a `test.describe()` scope that are re-declared (shadowed) with `const`/`let`/`var` inside a nested `test()` or hook callback. The outer variable stays `undefined`, causing runtime crashes — typically in `afterAll` cleanup.
 
-### PW-STABILITY-008 — Manual browser.newContext() in test bodies
+### PW-STABILITY-008 — Manual browser.newContext() / request.newContext() in test bodies
 | Property | Value |
 |----------|-------|
 | Severity | **Medium** |
 | Category | Stability |
-| Analysis | AST-based: detects `browser.newContext()` calls inside `test()` callbacks |
+| Analysis | AST-based: detects `browser.newContext()` and `request.newContext()` calls inside `test()` callbacks |
 | Scope | Excludes hooks (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`) |
 
-Tests creating browser contexts manually via `browser.newContext()` instead of using Playwright fixtures. Manual lifecycle management is fragile — contexts are not cleaned up on test failure, causing resource leaks. Differs from PW-STABILITY-005 (which flags missing cleanup) in that this flags the manual pattern itself.
+Tests creating browser or API request contexts manually via `browser.newContext()` / `request.newContext()` instead of using Playwright fixtures. Manual lifecycle management is fragile — contexts are not cleaned up (`.close()` / `.dispose()`) on test failure, causing resource leaks and connection exhaustion. Differs from PW-STABILITY-005 (which flags missing cleanup) in that this flags the manual pattern itself.
 
 ---
 
@@ -588,11 +640,12 @@ Explicit timeouts improve clarity and predictability.
 ### PW-INSIGHT-004 — Excessive retries
 | Property | Value |
 |---|---|
-| Severity | **Medium** |
+| Severity | **Medium** (3-4 retries) / **High** (≥5 retries) |
 | Category | Insight |
 | Trigger | retries > 2 |
+| Escalation | **High** when retries ≥ 5 — indicates systemic test instability |
 
-Retries should be minimal and focused on rare infra flake.
+Retries should be minimal and focused on rare infra flake. At 5+ retries, the configuration is compensating for fundamental test instability — each flaky test can run up to N+1 times, dramatically inflating CI duration and masking root causes.
 
 ### PW-INSIGHT-005 — Trace capture not configured
 | Property | Value |
@@ -820,7 +873,7 @@ Emitted when the target repository path passed to the scanner does not exist or 
 
 | Category | Count |
 |----------|-------|
-| Flakiness (PW-FLAKE) | 7 |
+| Flakiness (PW-FLAKE) | 10 |
 | Stability (PW-STABILITY) | 9 |
 | Locators (PW-LOC) | 3 |
 | Performance (PW-PERF) | 3 |
@@ -832,7 +885,7 @@ Emitted when the target repository path passed to the scanner does not exist or 
 | Cypress (CY) | 7 |
 | Selenium (SE) | 4 |
 | System (SCAN) | 1 |
-| **Total** | **86** |
+| **Total** | **89** |
 
 ---
 
@@ -841,7 +894,7 @@ Emitted when the target repository path passed to the scanner does not exist or 
 Findings are weighted by type and severity to produce risk points, which are then converted to a **0–100 health score** (higher = better) using exponential decay:
 
 ```
-healthScore = round(100 × exp(-riskPoints / 80))
+healthScore = round(100 × exp(-riskPoints / 200))
 ```
 
 ### Severity weights
@@ -864,22 +917,22 @@ healthScore = round(100 × exp(-riskPoints / 80))
 ### Evidence scaling
 
 Each finding's evidence count (number of occurrences) is factored in using a
-log₂ curve with a 0.7 scaling coefficient. There is no hard cap — every
-occurrence reduction is rewarded in the score. The log₂ curve provides natural
-compression so no single finding can dominate the overall grade.
+power curve (N^0.6). This provides meaningful sensitivity across the full range —
+fixing 58 of 170 occurrences produces a visible score improvement. Every
+occurrence reduction is rewarded in the score.
 
 ```
-evidenceMultiplier = 1 + 0.7 × log₂(max(evidenceCount, 1))
+evidenceMultiplier = max(evidenceCount, 1) ^ 0.6
 ```
 
 | Occurrences | Multiplier | HIGH finding risk points |
 |:-----------:|:----------:|:------------------------:|
 | 1 | 1.00 | 3.0 |
 | 5 | 2.63 | 7.9 |
-| 10 | 3.32 | 10.0 |
-| 25 | 4.25 | 12.8 |
-| 50 | 4.95 | 14.8 |
-| 100 | 5.65 | 17.0 |
+| 10 | 3.98 | 11.9 |
+| 25 | 6.90 | 20.7 |
+| 50 | 10.46 | 31.4 |
+| 100 | 15.85 | 47.5 |
 
 ### Density normalization
 
@@ -887,19 +940,19 @@ When inventory data is available, the decay constant (λ) is scaled by suite siz
 
 ```
 effectiveTestFiles = testFiles + cypressTestFiles + seleniumTestFiles
-densityFactor      = clamp(1.0 + 0.5 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 3.5)
-adjustedLambda     = 80 × densityFactor
+densityFactor      = clamp(1.0 + 0.3 × log₂(max(effectiveTestFiles / 50, 1)), 1.0, 4.0)
+adjustedLambda     = 200 × densityFactor
 healthScore        = round(100 × exp(-riskPoints / adjustedLambda))
 ```
 
 | Suite size | densityFactor | Effective λ | Effect |
 |------------|--------------|-------------|--------|
-| ≤ 50 files | 1.0 | 80 | No adjustment (neutral) |
-| 100 files | 1.5 | 120 | Moderate relief |
-| 200 files | 2.0 | 160 | Significant relief |
-| 500 files | 2.16 | 173 | Strong relief |
-| 1,000 files | 2.66 | 213 | High relief |
-| 3,200+ files | 3.5 (cap) | 280 | Maximum relief |
+| ≤ 50 files | 1.0 | 200 | No adjustment (neutral) |
+| 100 files | 1.3 | 260 | Moderate relief |
+| 200 files | 1.6 | 320 | Significant relief |
+| 500 files | 2.0 | 400 | Strong relief |
+| 1,000 files | 2.3 | 460 | High relief |
+| 5,000 files | 2.9 | 580 | Very high relief |
 
 When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identical to pre-density behavior).
 
@@ -918,11 +971,11 @@ When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identi
 | Risk points | Health score | Grade |
 |-------------|-------------|-------|
 | 0 | 100 | A |
-| 20 | 78 | B |
-| 50 | 54 | C |
-| 85 | 35 | D |
-| 120 | 22 | F |
-| 164 | 13 | F |
+| 50 | 78 | B |
+| 100 | 61 | B |
+| 200 | 37 | D |
+| 300 | 22 | F |
+| 400 | 14 | F |
 
 Grade thresholds are customizable via `.auditrc.json`:
 

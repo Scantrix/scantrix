@@ -37,6 +37,27 @@ test.skip('broken test that nobody fixes', async ({ page }) => {
   await page.goto('https://staging.example.com/broken');
 });
 
+test('debug session leftover', async ({ page }) => {
+  await page.goto('https://staging.example.com/debug');
+  await page.pause();
+  await expect(page.locator('h1')).toBeVisible();
+});
+
+test('extract text without guard', async ({ page }) => {
+  await page.goto('https://staging.example.com/details');
+  const title = await page.locator('.title').innerText();
+  const content = await page.locator('.body').innerHTML();
+  const fieldVal = await page.locator('#amount').inputValue();
+});
+
+test('guarded retrieval - should not flag', async ({ page }) => {
+  await page.goto('https://staging.example.com/details');
+  await expect(page.locator('#amount')).not.toHaveText('');
+  const fieldVal = await page.locator('#amount').inputValue();
+  await expect(page.locator('.title')).toContainText('Order');
+  const title = await page.locator('.title').innerText();
+});
+
 test('search with deprecated methods', async ({ page }) => {
   await page.goto('https://staging.example.com/search');
   await page.type('#search-input', 'test query');

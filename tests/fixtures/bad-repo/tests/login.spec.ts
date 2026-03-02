@@ -65,7 +65,7 @@ test('visit home page', async ({ page }) => {
   await page.waitForTimeout(1000);
 });
 
-// Debug pause left in committed code (PW-FLAKE-001)
+// Debug pause left in committed code (PW-FLAKE-009)
 test('debug session leftover', async ({ page }) => {
   await page.goto('https://staging.example.com/debug');
   await page.pause();

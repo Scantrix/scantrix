@@ -30,6 +30,48 @@ describe("bad-repo", () => {
     expect(f.evidence.length).toBeGreaterThanOrEqual(3);
   });
 
+  it("detects disguised hard waits via global name scan (PW-FLAKE-001)", () => {
+    const f = getFinding(results, "PW-FLAKE-001")!;
+    const disguisedEvidence = f.evidence.filter((e) =>
+      e.snippet.includes("Disguised hard wait"),
+    );
+    expect(disguisedEvidence.length).toBeGreaterThanOrEqual(3);
+    expect(disguisedEvidence.some((e) => e.snippet.includes("delay()"))).toBe(true);
+    expect(disguisedEvidence.some((e) => e.snippet.includes("waitForDataSync()"))).toBe(true);
+    expect(disguisedEvidence.some((e) => e.snippet.includes("waitForIdleNetwork()"))).toBe(true);
+    // retryOperation should NOT appear (false-positive filter)
+    expect(disguisedEvidence.some((e) => e.snippet.includes("retryOperation"))).toBe(false);
+  });
+
+  it("detects debug pauses (PW-FLAKE-009)", () => {
+    expect(hasFinding(results, "PW-FLAKE-009")).toBe(true);
+    const f = getFinding(results, "PW-FLAKE-009")!;
+    expect(f.severity).toBe("high");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(1);
+    // Should NOT include evidence from login.spec.ts (test.fixme file)
+    expect(f.evidence.some((e) => e.file.includes("login.spec"))).toBe(false);
+  });
+
+  it("detects retrieval methods without content guard (PW-FLAKE-010)", () => {
+    expect(hasFinding(results, "PW-FLAKE-010")).toBe(true);
+    const f = getFinding(results, "PW-FLAKE-010")!;
+    expect(f.severity).toBe("medium");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(3);
+    // Guarded retrieval calls (preceded by expect().not.toHaveText/toContainText) should NOT appear
+    const guardedEvidence = f.evidence.filter((e) =>
+      e.snippet.includes("guarded retrieval")
+    );
+    expect(guardedEvidence.length).toBe(0);
+  });
+
+  it("PW-FLAKE-001 does not catch page.pause()", () => {
+    const f = getFinding(results, "PW-FLAKE-001")!;
+    const pauseEvidence = f.evidence.filter((e) =>
+      e.snippet.includes("page.pause"),
+    );
+    expect(pauseEvidence.length).toBe(0);
+  });
+
   it("detects force clicks (PW-FLAKE-002)", () => {
     expect(hasFinding(results, "PW-FLAKE-002")).toBe(true);
   });
@@ -114,12 +156,12 @@ describe("bad-repo", () => {
     expect(f.evidence[0].snippet).toContain("shadowed");
   });
 
-  it("detects manual browser.newContext() in test bodies (PW-STABILITY-008)", () => {
+  it("detects manual browser.newContext()/request.newContext() in test bodies (PW-STABILITY-008)", () => {
     expect(hasFinding(results, "PW-STABILITY-008")).toBe(true);
     const f = getFinding(results, "PW-STABILITY-008")!;
     expect(f.severity).toBe("medium");
     expect(f.evidence.length).toBeGreaterThanOrEqual(2);
-    expect(f.evidence[0].snippet).toContain("browser context");
+    expect(f.evidence[0].snippet).toContain("context(s) manually");
   });
 
   // ── Flakiness (AST) ──────────────────────────────────────────
@@ -128,6 +170,14 @@ describe("bad-repo", () => {
     const f = getFinding(results, "PW-FLAKE-007")!;
     expect(f.severity).toBe("high");
     expect(f.evidence[0].snippet).toContain("expect()");
+  });
+
+  it("detects missing await on async Playwright APIs (PW-FLAKE-008)", () => {
+    expect(hasFinding(results, "PW-FLAKE-008")).toBe(true);
+    const f = getFinding(results, "PW-FLAKE-008")!;
+    expect(f.severity).toBe("high");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(3);
+    expect(f.evidence[0].snippet).toContain("unawaited");
   });
 
   // ── CI ─────────────────────────────────────────────────────────
@@ -195,12 +245,12 @@ describe("bad-repo", () => {
 
   // ── Inventory ──────────────────────────────────────────────────
   it("counts test files correctly", () => {
-    expect(results.inventory.testFiles).toBe(10);
+    expect(results.inventory.testFiles).toBe(12);
   });
 
   it("counts individual test cases across files", () => {
     expect(results.inventory.testCases).toBeDefined();
-    expect(results.inventory.testCases).toBe(32);
+    expect(results.inventory.testCases).toBe(46);
   });
 
   it("detects Playwright config", () => {
@@ -263,6 +313,14 @@ describe("good-repo", () => {
 
   it("does NOT flag mutating imported test data (ARCH-012)", () => {
     expect(hasFinding(results, "ARCH-012")).toBe(false);
+  });
+
+  it("does NOT flag missing await (PW-FLAKE-008)", () => {
+    expect(hasFinding(results, "PW-FLAKE-008")).toBe(false);
+  });
+
+  it("does NOT flag retrieval methods (PW-FLAKE-010)", () => {
+    expect(hasFinding(results, "PW-FLAKE-010")).toBe(false);
   });
 
   it("has Playwright config detected", () => {
