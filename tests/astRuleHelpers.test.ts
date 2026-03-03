@@ -11,6 +11,7 @@ import {
   findSleepWrapperExports,
   findDisguisedHardWaitCalls,
   findClassSleepMethodExports,
+  analyzePomClassStructure,
 } from "../src/astRuleHelpers";
 
 // ─── PW-STABILITY-007: Variable Shadowing ────────────────────────────
@@ -1026,5 +1027,198 @@ export async function getValueSafe(page: any) {
 `;
     const results = findUnguardedRetrievalMethodsInFunctions("utils/helpers.ts", source);
     expect(results).toHaveLength(0);
+  });
+});
+
+// ─── ARCH-002: POM "Locator Bag" Detection ────────────────────────────
+
+describe("analyzePomClassStructure", () => {
+  it("flags pure locator bag (6+ locators, 0 action methods)", () => {
+    const source = `
+export class SettingsPage {
+  readonly heading = this.page.locator('h1');
+  readonly nameInput = this.page.getByLabel('Name');
+  readonly emailInput = this.page.getByLabel('Email');
+  readonly phoneInput = this.page.getByLabel('Phone');
+  readonly saveButton = this.page.getByRole('button', { name: 'Save' });
+  readonly cancelButton = this.page.getByRole('button', { name: 'Cancel' });
+
+  constructor(private page: any) {}
+}
+`;
+    const result = analyzePomClassStructure("pages/settings.ts", source);
+    expect(result).not.toBeNull();
+    expect(result!.publicLocatorCount).toBe(6);
+    expect(result!.actionMethodCount).toBe(0);
+    expect(result!.isLocatorBag).toBe(true);
+  });
+
+  it("does NOT flag well-encapsulated POM (locators + action methods)", () => {
+    const source = `
+export class LoginPage {
+  readonly emailInput = this.page.getByLabel('Email');
+  readonly passwordInput = this.page.getByLabel('Password');
+  readonly submitButton = this.page.getByRole('button', { name: 'Submit' });
+  readonly errorMessage = this.page.locator('.error');
+  readonly rememberMe = this.page.getByLabel('Remember me');
+  readonly forgotLink = this.page.getByRole('link', { name: 'Forgot?' });
+  readonly heading = this.page.locator('h1');
+  readonly logo = this.page.locator('.logo');
+
+  constructor(private page: any) {}
+
+  async login(email: string, password: string) {
+    await this.emailInput.fill(email);
+    await this.passwordInput.fill(password);
+    await this.submitButton.click();
+  }
+
+  async loginWithRememberMe(email: string, password: string) {
+    await this.emailInput.fill(email);
+    await this.passwordInput.fill(password);
+    await this.rememberMe.check();
+    await this.submitButton.click();
+  }
+
+  async resetPassword() {
+    await this.forgotLink.click();
+  }
+}
+`;
+    const result = analyzePomClassStructure("pages/login.ts", source);
+    expect(result).not.toBeNull();
+    expect(result!.publicLocatorCount).toBe(8);
+    expect(result!.actionMethodCount).toBe(3);
+    // 3/8 = 0.375 >= 0.3 threshold → not a locator bag
+    expect(result!.isLocatorBag).toBe(false);
+  });
+
+  it("detects constructor-assigned locators as public locators", () => {
+    const source = `
+export class DashboardPage {
+  heading: any;
+  sidebar: any;
+  nav: any;
+  searchInput: any;
+  profileLink: any;
+  logoutButton: any;
+
+  constructor(private page: any) {
+    this.heading = page.locator('h1');
+    this.sidebar = page.locator('.sidebar');
+    this.nav = page.locator('nav');
+    this.searchInput = page.getByLabel('Search');
+    this.profileLink = page.getByRole('link', { name: 'Profile' });
+    this.logoutButton = page.getByRole('button', { name: 'Logout' });
+  }
+}
+`;
+    const result = analyzePomClassStructure("pages/dashboard.ts", source);
+    expect(result).not.toBeNull();
+    expect(result!.publicLocatorCount).toBe(6);
+    expect(result!.locatorNames).toContain("heading");
+    expect(result!.locatorNames).toContain("logoutButton");
+    expect(result!.isLocatorBag).toBe(true);
+  });
+
+  it("excludes private/protected locators from count", () => {
+    const source = `
+export class CheckoutPage {
+  private emailInput = this.page.getByLabel('Email');
+  protected passwordInput = this.page.getByLabel('Password');
+  readonly submitButton = this.page.getByRole('button', { name: 'Submit' });
+  private nameInput = this.page.getByLabel('Name');
+  protected phoneInput = this.page.getByLabel('Phone');
+  readonly heading = this.page.locator('h1');
+
+  constructor(private page: any) {}
+}
+`;
+    const result = analyzePomClassStructure("pages/checkout.ts", source);
+    expect(result).not.toBeNull();
+    // Only 2 public locators (submitButton, heading) — private/protected excluded
+    expect(result!.publicLocatorCount).toBe(2);
+    expect(result!.isLocatorBag).toBe(false);
+  });
+
+  it("returns null for non-class files", () => {
+    const source = `
+export function helperFunc() {
+  return 42;
+}
+const x = 1;
+`;
+    const result = analyzePomClassStructure("utils/helpers.ts", source);
+    expect(result).toBeNull();
+  });
+
+  it("borderline ratio (10 locators, 3 methods = 0.3) → NOT a locator bag", () => {
+    const source = `
+export class FormPage {
+  readonly field1 = this.page.getByLabel('Field 1');
+  readonly field2 = this.page.getByLabel('Field 2');
+  readonly field3 = this.page.getByLabel('Field 3');
+  readonly field4 = this.page.getByLabel('Field 4');
+  readonly field5 = this.page.getByLabel('Field 5');
+  readonly field6 = this.page.getByLabel('Field 6');
+  readonly field7 = this.page.getByLabel('Field 7');
+  readonly field8 = this.page.getByLabel('Field 8');
+  readonly field9 = this.page.getByLabel('Field 9');
+  readonly submitBtn = this.page.getByRole('button', { name: 'Submit' });
+
+  constructor(private page: any) {}
+
+  async fillRequired() {
+    await this.field1.fill('value');
+    await this.field2.fill('value');
+    await this.field3.fill('value');
+  }
+
+  async fillOptional() {
+    await this.field4.fill('value');
+    await this.field5.fill('value');
+  }
+
+  async submit() {
+    await this.submitBtn.click();
+  }
+}
+`;
+    const result = analyzePomClassStructure("pages/form.ts", source);
+    expect(result).not.toBeNull();
+    expect(result!.publicLocatorCount).toBe(10);
+    expect(result!.actionMethodCount).toBe(3);
+    // 3/10 = 0.3 — exactly at threshold, should NOT flag
+    expect(result!.isLocatorBag).toBe(false);
+  });
+
+  it("getters returning locators are NOT counted as action methods", () => {
+    const source = `
+export class ProductPage {
+  readonly title = this.page.locator('.title');
+  readonly price = this.page.locator('.price');
+  readonly description = this.page.locator('.description');
+  readonly image = this.page.locator('.image');
+  readonly addToCart = this.page.getByRole('button', { name: 'Add' });
+  readonly quantity = this.page.getByLabel('Quantity');
+
+  constructor(private page: any) {}
+
+  get titleLocator() {
+    return this.title;
+  }
+
+  get priceLocator() {
+    return this.price;
+  }
+}
+`;
+    const result = analyzePomClassStructure("pages/product.ts", source);
+    expect(result).not.toBeNull();
+    expect(result!.publicLocatorCount).toBe(6);
+    // Getters should not be counted as action methods
+    expect(result!.actionMethodCount).toBe(0);
+    expect(result!.totalMethodCount).toBe(0);
+    expect(result!.isLocatorBag).toBe(true);
   });
 });

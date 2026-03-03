@@ -23,7 +23,9 @@ import {
   findSleepWrapperExports,
   findDisguisedHardWaitCalls,
   findClassSleepMethodExports,
+  analyzePomClassStructure,
 } from "./astRuleHelpers";
+import type { PomClassAnalysis } from "./astRuleHelpers";
 
 export type Evidence = { file: string; line: number; snippet: string };
 
@@ -1053,55 +1055,7 @@ function analyzeTestFile(content: string): TestFileAnalysis {
 // ARCHITECTURAL ANALYSIS FUNCTIONS
 // ============================================
 
-type PomAnalysis = {
-  file: string;
-  className: string;
-  extendsClass: string | null;
-  hasPublicLocators: boolean;
-  publicLocatorCount: number;
-  locatorExamples: string[];
-};
-
-function analyzePomFile(filePath: string, content: string): PomAnalysis | null {
-  // Check if this looks like a POM file
-  const classMatch = content.match(/(?:export\s+)?class\s+(\w+(?:Page|Tab|Modal|Component|Section)?)\s*(?:extends\s+(\w+))?\s*\{/);
-  if (!classMatch) return null;
-  
-  const className = classMatch[1];
-  const extendsClass = classMatch[2] || null;
-  
-  // Check for public locators (this.xxx = page.locator/getBy without private/protected)
-  const publicLocatorPatterns = [
-    /this\.(\w+)\s*=\s*(?:this\.)?page\.(?:locator|getBy\w+)/g,
-    /public\s+(?:readonly\s+)?(\w+)\s*[=:]/g,
-  ];
-  
-  const locatorExamples: string[] = [];
-  let publicLocatorCount = 0;
-  
-  for (const pattern of publicLocatorPatterns) {
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(content)) !== null) {
-      publicLocatorCount++;
-      if (locatorExamples.length < 3) {
-        locatorExamples.push(match[1]);
-      }
-    }
-  }
-  
-  // Check if locators are exposed without encapsulation
-  const hasPublicLocators = publicLocatorCount > 5 && !content.includes('private') && !content.includes('protected');
-  
-  return {
-    file: filePath,
-    className,
-    extendsClass,
-    hasPublicLocators,
-    publicLocatorCount,
-    locatorExamples,
-  };
-}
+type PomAnalysis = PomClassAnalysis & { file: string };
 
 type TestCouplingAnalysis = {
   file: string;
@@ -2538,11 +2492,11 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         title: "Retrieval methods used without content guard",
         description:
           "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
-          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM, " +
           "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.",
         recommendation:
-          "Guard retrieval calls with a web-first assertion or custom poll before extracting text.\n" +
-          "This assertion specifically waits for the content to be ready, preventing retrieval methods from returning an empty string\n" +
+          "If you need to assert text on the page, prefer expect(locator).toHaveText() or other auto-retrying matchers that include built-in waiting. \n" +
+          "For complex assertions, guard retrieval calls with a web-first assertion or custom poll before extracting text.\n" +
           "  await expect(locator).not.toHaveText('');\n" +
           "  const text = await locator.innerText();\n" +
           "Or use expect().toPass() for custom polling:\n" +
@@ -2778,9 +2732,9 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     try {
       const content = await fs.readFile(pomFile, "utf8");
       pomContentsMap.set(pomFile, content);
-      const analysis = analyzePomFile(pomFile, content);
+      const analysis = analyzePomClassStructure(pomFile, content);
       if (analysis) {
-        pomAnalyses.push(analysis);
+        pomAnalyses.push({ ...analysis, file: pomFile });
       }
     } catch {
       // Skip files that can't be read
@@ -2826,7 +2780,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         // Refresh description with combined total
         existing010.description =
           "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
-          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+          "are not preceded by a content guard. These methods only wait for the element to exist in the DOM, " +
           "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.";
       } else {
         findings.push({
@@ -2837,7 +2791,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
           title: "Retrieval methods used without content guard",
           description:
             "Retrieval method calls (innerText, textContent, innerHTML, inputValue, etc.) " +
-            "are not preceded by a content guard. These methods only wait for the element to exist in the DOM — " +
+            "are not preceded by a content guard. These methods only wait for the element to exist in the DOM, " +
             "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.",
           recommendation:
             "Guard retrieval calls with a web-first assertion or custom poll before extracting text:\n" +
@@ -2880,25 +2834,27 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     }
   }
 
-  // ARCH-002: Public locators (poor encapsulation)
-  const pomsWithPublicLocators = pomAnalyses.filter(p => p.hasPublicLocators);
-  
-  if (pomsWithPublicLocators.length >= 2) {
+  // ARCH-002: Locator-bag POMs (many public locators, few/no action methods)
+  const locatorBagPoms = pomAnalyses.filter(p => p.isLocatorBag);
+
+  if (locatorBagPoms.length >= 2) {
     findings.push({
       findingId: "ARCH-002",
       severity: "low",
-      title: "Consider encapsulating complex locator interactions",
+      title: "Locator-bag Page Objects lack action methods",
       description:
-        `${pomsWithPublicLocators.length} Page Object(s) expose locators as public properties. Note: Playwright's official POM example uses public readonly locators, which is an acceptable pattern. However, for complex multi-step interactions, wrapping locators in semantic action methods improves readability and maintenance.`,
+        `${locatorBagPoms.length} Page Object(s) expose many public locators without wrapping them in semantic action methods. ` +
+        `POMs with public readonly locators AND action methods that use them (e.g., login(), addToCart()) are fine — only "locator bag" classes that are mostly bare locator lists are flagged.`,
       recommendation:
-        "Public readonly locators are acceptable per Playwright docs. For complex interactions, consider wrapping multi-step operations in action methods (e.g., 'async login(user, pass) { ... }') while keeping simple locators public for flexibility.\nhttps://playwright.dev/docs/pom",
-      evidence: pomsWithPublicLocators.slice(0, 10).map(p => ({
+        "Add action methods that use the locators to encapsulate multi-step interactions (e.g., 'async login(user, pass) { ... }'). " +
+        "Public readonly locators are acceptable per Playwright docs — this rule only flags classes where locators vastly outnumber the methods that use them.\nhttps://playwright.dev/docs/pom",
+      evidence: locatorBagPoms.slice(0, 10).map(p => ({
         file: normalize(p.file),
         line: 1,
-        snippet: `${p.publicLocatorCount} public locators${p.locatorExamples.length ? `: ${p.locatorExamples.join(', ')}` : ''}`,
+        snippet: `${p.publicLocatorCount} public locators, ${p.actionMethodCount} action methods`,
       })),
-      totalOccurrences: pomsWithPublicLocators.length,
-      affectedFiles: pomsWithPublicLocators.length,
+      totalOccurrences: locatorBagPoms.length,
+      affectedFiles: locatorBagPoms.length,
     });
   }
 

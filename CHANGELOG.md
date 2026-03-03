@@ -1,5 +1,22 @@
 # Changelog
 
+## [6.3.1] - 2026-03-02
+
+### ARCH-002: AST-based "locator bag" detection
+
+- **Redesigned ARCH-002** to use the TypeScript Compiler API via `analyzePomClassStructure()`.
+  The old regex-based `analyzePomFile()` flagged any POM with >5 public locators lacking
+  `private`/`protected` anywhere in the file — producing false positives on well-encapsulated
+  POMs that follow Playwright's recommended `public readonly` pattern with action methods.
+- **New detection logic**: A POM is a "locator bag" when `publicLocatorCount > 5` AND
+  `actionMethodCount / publicLocatorCount < 0.3`. Action methods are non-constructor,
+  non-getter/setter methods whose bodies reference `this.<locatorName>`.
+- **AST analysis** walks class members to: identify public locator properties (direct
+  initializers + constructor assignments), check per-member `private`/`protected` modifiers,
+  and count methods referencing locators.
+- **False positive elimination**: POMs with public readonly locators AND wrapping action
+  methods (e.g., `login()`, `addToCart()`) are no longer flagged.
+
 ## [6.3.0] - 2026-03-01
 
 ### PW-FLAKE-010: AST-based detection + POM/page class coverage

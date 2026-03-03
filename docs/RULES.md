@@ -378,13 +378,14 @@ Deprecated packages can be unmaintained or vulnerable. Migrate to the recommende
 
 Multiple POMs without a shared base class or consistent fixtures.
 
-### ARCH-002 — Public locators in POMs
+### ARCH-002 — Locator-bag Page Objects
 | Property | Value |
 |----------|-------|
 | Severity | **Low** |
 | Category | Architecture |
+| Detection | AST-based (`analyzePomClassStructure`) |
 
-POMs exposing locators as public properties instead of encapsulating them in methods.
+Flags POMs that are "locator bags": classes with >5 public locators and <30% action method coverage. Uses the TypeScript Compiler API to walk class members, distinguish properties from methods, check per-member modifiers, and count methods whose bodies reference `this.<locatorName>`. POMs with public readonly locators AND adequate action methods are NOT flagged.
 
 ### ARCH-003 — Test-to-test imports
 | Property | Value |

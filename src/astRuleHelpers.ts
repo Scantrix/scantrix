@@ -74,6 +74,17 @@ export interface ClassSleepMethodExport {
   methodNames: string[];
 }
 
+export interface PomClassAnalysis {
+  className: string;
+  extendsClass: string | null;
+  publicLocatorCount: number;
+  locatorNames: string[];
+  actionMethodCount: number;
+  actionMethodNames: string[];
+  totalMethodCount: number;
+  isLocatorBag: boolean;
+}
+
 // ─── Shared Utilities ────────────────────────────────────────────────
 
 function parseSource(filePath: string, content: string): ts.SourceFile {
@@ -1409,4 +1420,205 @@ function collectRetrievalCalls(
   }
   walk(node);
   return calls;
+}
+
+// ─── ARCH-002: AST-Based POM "Locator Bag" Detection ─────────────────
+
+/** Locator-related Playwright page method prefixes. */
+const LOCATOR_PAGE_METHODS = new Set([
+  "locator",
+  "getByRole",
+  "getByText",
+  "getByLabel",
+  "getByPlaceholder",
+  "getByAltText",
+  "getByTitle",
+  "getByTestId",
+]);
+
+function isLocatorInit(expr: ts.Expression): boolean {
+  // Matches: (this.)page.locator() / (this.)page.getBy*()
+  if (!ts.isCallExpression(expr)) return false;
+  const callee = expr.expression;
+  if (!ts.isPropertyAccessExpression(callee)) return false;
+  const methodName = callee.name.text;
+  if (!LOCATOR_PAGE_METHODS.has(methodName)) return false;
+  // The object should be `page` or `this.page`
+  const obj = callee.expression;
+  if (ts.isIdentifier(obj) && obj.text === "page") return true;
+  if (
+    ts.isPropertyAccessExpression(obj) &&
+    obj.name.text === "page" &&
+    obj.expression.kind === ts.SyntaxKind.ThisKeyword
+  ) return true;
+  return false;
+}
+
+function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  const mods = ts.canHaveModifiers(node) ? ts.getModifiers(node) : undefined;
+  return mods?.some((m) => m.kind === kind) ?? false;
+}
+
+function isPrivateOrProtected(node: ts.Node): boolean {
+  return (
+    hasModifier(node, ts.SyntaxKind.PrivateKeyword) ||
+    hasModifier(node, ts.SyntaxKind.ProtectedKeyword)
+  );
+}
+
+/**
+ * Analyze a POM file's class structure to determine if it is a "locator bag":
+ * a class with many public locators and few/no action methods that use them.
+ *
+ * Returns null if the file does not contain a class declaration.
+ */
+export function analyzePomClassStructure(
+  filePath: string,
+  content: string,
+): PomClassAnalysis | null {
+  const sf = parseSource(filePath, content);
+
+  // Find the first class declaration
+  let classDecl: ts.ClassDeclaration | undefined;
+  function findClass(node: ts.Node): void {
+    if (classDecl) return;
+    if (ts.isClassDeclaration(node)) {
+      classDecl = node;
+      return;
+    }
+    ts.forEachChild(node, findClass);
+  }
+  findClass(sf);
+
+  if (!classDecl) return null;
+
+  const className = classDecl.name?.text ?? "(anonymous)";
+  let extendsClass: string | null = null;
+  if (classDecl.heritageClauses) {
+    for (const clause of classDecl.heritageClauses) {
+      if (clause.token === ts.SyntaxKind.ExtendsKeyword && clause.types.length > 0) {
+        const baseExpr = clause.types[0].expression;
+        if (ts.isIdentifier(baseExpr)) {
+          extendsClass = baseExpr.text;
+        }
+      }
+    }
+  }
+
+  // Phase 1: Discover public locator properties
+  const locatorNames: string[] = [];
+
+  // Map property names to their declarations for modifier checking
+  const propertyDecls = new Map<string, ts.PropertyDeclaration>();
+  for (const member of classDecl.members) {
+    if (ts.isPropertyDeclaration(member) && ts.isIdentifier(member.name)) {
+      propertyDecls.set(member.name.text, member);
+    }
+  }
+
+  // 1a: Property declarations with locator initializers
+  for (const member of classDecl.members) {
+    if (ts.isPropertyDeclaration(member) && ts.isIdentifier(member.name)) {
+      if (isPrivateOrProtected(member)) continue;
+      if (member.initializer && isLocatorInit(member.initializer)) {
+        locatorNames.push(member.name.text);
+      }
+    }
+  }
+
+  // 1b: Constructor-assigned locators: this.foo = (this.)page.locator/getBy*()
+  for (const member of classDecl.members) {
+    if (!ts.isConstructorDeclaration(member) || !member.body) continue;
+    for (const stmt of member.body.statements) {
+      if (!ts.isExpressionStatement(stmt)) continue;
+      const expr = stmt.expression;
+      if (!ts.isBinaryExpression(expr) || expr.operatorToken.kind !== ts.SyntaxKind.EqualsToken) continue;
+
+      // LHS: this.foo
+      const lhs = expr.left;
+      if (
+        !ts.isPropertyAccessExpression(lhs) ||
+        lhs.expression.kind !== ts.SyntaxKind.ThisKeyword ||
+        !ts.isIdentifier(lhs.name)
+      ) continue;
+
+      const propName = lhs.name.text;
+
+      // Skip if already found via property declaration
+      if (locatorNames.includes(propName)) continue;
+
+      // Check the RHS is a locator init
+      if (!isLocatorInit(expr.right)) continue;
+
+      // Check if the property declaration has private/protected
+      const propDecl = propertyDecls.get(propName);
+      if (propDecl && isPrivateOrProtected(propDecl)) continue;
+
+      locatorNames.push(propName);
+    }
+  }
+
+  const publicLocatorCount = locatorNames.length;
+  const locatorNameSet = new Set(locatorNames);
+
+  // Phase 2: Count action methods that reference locators via this.<locatorName>
+  const actionMethodNames: string[] = [];
+  let totalMethodCount = 0;
+
+  for (const member of classDecl.members) {
+    // Skip getters and setters — they're separate AST node types
+    if (ts.isGetAccessorDeclaration(member)) continue;
+    if (ts.isSetAccessorDeclaration(member)) continue;
+
+    if (!ts.isMethodDeclaration(member)) continue;
+    if (!ts.isIdentifier(member.name)) continue;
+
+    // Skip constructor (already handled above; methods only)
+    const methodName = member.name.text;
+    if (methodName === "constructor") continue;
+
+    totalMethodCount++;
+
+    // Check if method body references this.<locatorName>
+    if (!member.body) continue;
+    let referencesLocator = false;
+
+    function checkLocatorRef(node: ts.Node): void {
+      if (referencesLocator) return;
+      if (
+        ts.isPropertyAccessExpression(node) &&
+        node.expression.kind === ts.SyntaxKind.ThisKeyword &&
+        ts.isIdentifier(node.name) &&
+        locatorNameSet.has(node.name.text)
+      ) {
+        referencesLocator = true;
+        return;
+      }
+      ts.forEachChild(node, checkLocatorRef);
+    }
+    checkLocatorRef(member.body);
+
+    if (referencesLocator) {
+      actionMethodNames.push(methodName);
+    }
+  }
+
+  const actionMethodCount = actionMethodNames.length;
+
+  // A POM is a "locator bag" when it has many public locators
+  // and fewer than 30% of them have wrapping action methods.
+  const isLocatorBag =
+    publicLocatorCount > 5 &&
+    (publicLocatorCount === 0 || actionMethodCount / publicLocatorCount < 0.3);
+
+  return {
+    className,
+    extendsClass,
+    publicLocatorCount,
+    locatorNames,
+    actionMethodCount,
+    actionMethodNames,
+    totalMethodCount,
+    isLocatorBag,
+  };
 }

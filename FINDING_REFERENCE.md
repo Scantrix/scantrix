@@ -85,7 +85,7 @@
 | ID | Title | Severity | Description |
 |---|---|---|---|
 | ARCH-001 | No shared base pattern across POMs | 🟡 LOW | POMs lack common base — consider fixtures over inheritance per Playwright docs |
-| ARCH-002 | Consider encapsulating locator interactions | 🟡 LOW | Public locators are OK per docs; flag complex interaction patterns |
+| ARCH-002 | Locator-bag Page Objects lack action methods | 🟡 LOW | AST-based: flags POMs with >5 public locators and <30% action method coverage |
 | ARCH-003 | Test coupling | 🔴 HIGH | Tests importing from other test files |
 | ARCH-004 | Missing fixture typing | 🟠 MEDIUM | `any` types in fixture definitions |
 | ARCH-005 | Hardcoded credentials | 🔴 HIGH | Passwords/API keys in test code |
@@ -211,7 +211,7 @@
 9. **PW-INSIGHT-007** - Fixed workers reduce flexibility
 10. **PW-INSIGHT-013** - E2E-only test strategy (missing test pyramid)
 11. **ARCH-001** - No shared base pattern — consider fixtures over inheritance
-12. **ARCH-002** - Public locators OK per docs; encapsulate complex interactions
+12. **ARCH-002** - Locator-bag POMs: many public locators with few/no action methods
 13. **ARCH-005a** - Hardcoded emails cause parallel test conflicts
 14. **ARCH-006** - API mocking enables faster, more isolated tests
 15. **ARCH-007** - Custom error types improve debugging
@@ -717,36 +717,45 @@ export class LoginPage extends BasePage {
 }
 ```
 
-### Pattern 15: Encapsulate Complex Interactions (ARCH-002)
+### Pattern 15: Add Action Methods to Locator-Bag POMs (ARCH-002)
 
-> **Note:** Playwright's official POM example uses `public readonly` locators, which is acceptable. Encapsulation is most valuable for complex multi-step interactions.
+> **Detection:** AST-based analysis counts public locator properties vs. action methods that reference them via `this.<locatorName>`. A POM is flagged as a "locator bag" when it has >5 public locators AND fewer than 30% have wrapping action methods. POMs with adequate action method coverage are NOT flagged.
 
- **Simple locators — public readonly is fine (per Playwright docs):**
+ **Locator bag — flagged (many locators, no action methods):**
 ```typescript
 export class ProductPage {
-  // Public readonly locators — acceptable per Playwright POM docs
   readonly addToCartButton = this.page.locator('[data-testid="add-to-cart"]');
   readonly quantity = this.page.locator('#quantity');
   readonly price = this.page.locator('.price');
+  readonly title = this.page.locator('.title');
+  readonly image = this.page.locator('.image');
+  readonly description = this.page.locator('.description');
 
   constructor(private page: Page) {}
+  // No action methods — tests must orchestrate all interactions directly
 }
 ```
 
- **Complex interactions — wrap in semantic methods:**
+ **Well-encapsulated POM — NOT flagged (locators + action methods):**
 ```typescript
 export class ProductPage {
-  readonly price = this.page.locator('.price');  // simple: keep public
-  private addToCartButton = this.page.locator('[data-testid="add-to-cart"]');
-  private quantityInput = this.page.locator('#quantity');
+  readonly price = this.page.locator('.price');
+  readonly title = this.page.locator('.title');
+  readonly addToCartButton = this.page.locator('[data-testid="add-to-cart"]');
+  readonly quantityInput = this.page.locator('#quantity');
+  readonly image = this.page.locator('.image');
+  readonly description = this.page.locator('.description');
 
   constructor(private page: Page) {}
 
-  // Complex multi-step: encapsulate
   async addToCart(quantity: number = 1) {
     await this.quantityInput.fill(String(quantity));
     await this.addToCartButton.click();
-    await this.page.waitForResponse(/\/api\/cart/);
+  }
+
+  async getProductInfo() {
+    await this.title.waitFor();
+    return { title: await this.title.innerText() };
   }
 }
 ```

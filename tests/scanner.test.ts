@@ -120,6 +120,13 @@ describe("bad-repo", () => {
   });
 
   // ── Architecture ───────────────────────────────────────────────
+  it("detects locator-bag POMs (ARCH-002)", () => {
+    expect(hasFinding(results, "ARCH-002")).toBe(true);
+    const f = getFinding(results, "ARCH-002")!;
+    expect(f.severity).toBe("low");
+    expect(f.evidence.length).toBeGreaterThanOrEqual(2);
+  });
+
   it("detects hardcoded credentials (ARCH-005)", () => {
     expect(hasFinding(results, "ARCH-005")).toBe(true);
   });
@@ -313,6 +320,10 @@ describe("good-repo", () => {
 
   it("does NOT flag mutating imported test data (ARCH-012)", () => {
     expect(hasFinding(results, "ARCH-012")).toBe(false);
+  });
+
+  it("does NOT flag locator-bag POMs (ARCH-002) — has action methods", () => {
+    expect(hasFinding(results, "ARCH-002")).toBe(false);
   });
 
   it("does NOT flag missing await (PW-FLAKE-008)", () => {
