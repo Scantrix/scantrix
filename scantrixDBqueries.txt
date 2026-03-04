@@ -1,9 +1,0 @@
-List all repos
-node -e "const db=require('better-sqlite3')('data/scantrix.db'); console.table(db.prepare('SELECT * FROM repos').all())"
-
-All scans with repo name
-node -e "const db=require('better-sqlite3')('data/scantrix.db'); console.table(db.prepare('SELECT r.name, s.id, s.scanned_at, s.risk_grade, s.risk_score, s.findings_count FROM scans s JOIN repos r ON r.id=s.repo_id ORDER BY s.scanned_at DESC').all())"
-
-
-Findings for a specific scan (replace 1 with the scan ID):
-node -e "const db=require('better-sqlite3')('data/scantrix.db'); console.table(db.prepare('SELECT finding_id, severity, title FROM findings WHERE scan_id=1').all())"
