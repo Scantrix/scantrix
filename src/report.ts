@@ -5,11 +5,7 @@ import type { ScanResults } from "./scanner";
 import type { PlaywrightConfigSummary } from "./configExtractor";
 import { toSarif } from "./sarifFormatter";
 import { loadBaseline, computeDiff, formatDiffMarkdown, type SnapshotMeta } from "./diffTracker";
-import { calculateRiskScore as sharedCalculateRiskScore, type ScoreInventory } from "./scoring";
-
-function severityScore(sev: "low" | "medium" | "high") {
-  return sev === "high" ? 3 : sev === "medium" ? 2 : 1;
-}
+import { calculateRiskScore, severityScore, type ScoreInventory } from "./scoring";
 
 function topFiles(evidence: { file: string }[], topN = 3) {
   const counts = new Map<string, number>();
@@ -371,6 +367,7 @@ tbody tr:hover td { background: #f1f5f9; }
 .badge-high { background: var(--severity-high-bg); color: var(--severity-high); border: 1px solid var(--severity-high-border); }
 .badge-medium { background: var(--severity-medium-bg); color: var(--severity-medium); border: 1px solid var(--severity-medium-border); }
 .badge-low { background: var(--severity-low-bg); color: var(--severity-low); border: 1px solid var(--severity-low-border); }
+.escalation-tag { font-size: 10px; color: #d97706; cursor: help; margin-left: 2px; vertical-align: middle; }
 
 /* ── Findings: Details/Summary ── */
 details.finding-card {
@@ -866,6 +863,7 @@ blockquote { margin: 8px 0; padding: 6px 12px; border-left: 3px solid #C7D2FE; b
 .finding-block-body { padding: 8px 10px; font-size: 0.9em; }
 .badge { display: inline-block; padding: 1px 6px; border-radius: 9999px; font-size: 11px; font-weight: 600; }
 .badge-high { background: #fef2f2; color: #dc2626; } .badge-medium { background: #fffbeb; color: #d97706; } .badge-low { background: #eff6ff; color: #2563eb; }
+.escalation-tag { font-size: 10px; color: #d97706; cursor: help; margin-left: 2px; }
 img { max-width: 100%; }
   `;
   return `<!doctype html>
@@ -904,11 +902,6 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
     } catch { /* try next */ }
   }
   return undefined;
-}
-
-/** Delegate to the shared scoring module — single source of truth for grade thresholds. */
-function calculateRiskScore(findings: ScanResults["findings"], inventory?: ScoreInventory) {
-  return sharedCalculateRiskScore(findings, inventory);
 }
 
 function getTopActionItems(findings: ScanResults["findings"]): string[] {
@@ -1912,7 +1905,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
 }
 
-function renderFinding(md: string[], f: { findingId: string; severity: string; title: string; description: string; recommendation: string; evidence: Array<{ file: string; line: number; snippet: string }>; totalOccurrences?: number; affectedFiles?: number }) {
+function renderFinding(md: string[], f: { findingId: string; severity: string; title: string; description: string; recommendation: string; evidence: Array<{ file: string; line: number; snippet: string }>; totalOccurrences?: number; affectedFiles?: number; baseSeverity?: string; escalationReason?: string }) {
   const category = f.findingId.startsWith("PW-FLAKE") ? "flakiness" :
     f.findingId.startsWith("PW-STABILITY") ? "stability" :
     f.findingId.startsWith("PW-LOC") ? "locators" :
@@ -1925,9 +1918,12 @@ function renderFinding(md: string[], f: { findingId: string; severity: string; t
     "other";
   const badgeClass = f.severity === "high" ? "badge-high" : f.severity === "medium" ? "badge-medium" : "badge-low";
   const badgeLabel = f.severity === "high" ? "High" : f.severity === "medium" ? "Medium" : "Low";
+  const escalationNote = f.baseSeverity
+    ? ` <span class="escalation-tag" title="${escapeHtml(f.escalationReason ?? '')}">&#9650; from ${f.baseSeverity}</span>`
+    : "";
 
   md.push(`<details class="finding-card" data-severity="${f.severity}" data-category="${category}" data-finding-id="${f.findingId}">`);
-  md.push(`<summary><span class="badge ${badgeClass}">${badgeLabel}</span> <strong>${f.findingId}</strong> &mdash; ${f.title}</summary>`);
+  md.push(`<summary><span class="badge ${badgeClass}">${badgeLabel}</span>${escalationNote} <strong>${f.findingId}</strong> &mdash; ${f.title}</summary>`);
   md.push(``);
   md.push(`> ${f.description}`);
   md.push(``);

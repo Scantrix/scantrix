@@ -46,12 +46,6 @@ function matchFirst(content: string, re: RegExp): string | undefined {
   return m?.[1];
 }
 
-function parseNumber(s?: string): number | undefined {
-  if (!s) return undefined;
-  const n = Number(s);
-  return Number.isFinite(n) ? n : undefined;
-}
-
 /**
  * Evaluate common numeric expressions found in Playwright configs.
  *

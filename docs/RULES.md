@@ -112,7 +112,7 @@ Custom assertion wrappers (e.g., `compareActualAndExpectedResults()`, `verifyEle
 
 Retrieval methods only wait for the element to exist in the DOM — not for its content to be populated. This can return empty or stale values when text is loaded dynamically. Guard with web-first assertions or custom polling before extraction.
 
-> **Content guard suppression:** A retrieval call is suppressed when any of the 5 preceding statements in the same function body contains an `expect()` chain ending in `.toHaveText()`, `.toContainText()`, `.toBeEmpty()`, or `.toPass()` (including negated forms like `.not.toHaveText()`).
+> **Content guard suppression:** A retrieval call is suppressed when any of the 5 preceding statements in the same function body contains an `expect()` chain ending in `.toHaveText()`, `.toContainText()`, `.toBeEmpty()`, or `.toPass()` (including negated forms like `.toBeVisible()`).
 
 > **Nested callback exclusion:** Retrieval calls inside nested arrow/function expressions (e.g., `expect.poll(() => loc.textContent())`) are not flagged, as those are intentional polling/assertion contexts.
 

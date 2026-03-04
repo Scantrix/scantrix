@@ -7,6 +7,7 @@ import { loadAuditConfig, generateDefaultConfig } from "./auditConfig";
 import { saveSnapshot, findLatestBaseline, formatDiffConsoleSummary, computeDiff, loadBaseline, type SnapshotMeta } from "./diffTracker";
 import { buildScanResult } from "./scanResult";
 import { JsonSink } from "./sinks";
+import { applyEscalation } from "./scoring";
 import fs from "fs/promises";
 
 async function main() {
@@ -97,6 +98,14 @@ try {
     checkOutdatedDependencies: checkUpdates,
     auditConfig,
   });
+
+  // ── Prevalence-based severity escalation ──────────────────────────
+  const effectiveTestFiles =
+    results.inventory.testFiles +
+    (results.inventory.cypressTestFiles ?? 0) +
+    (results.inventory.seleniumTestFiles ?? 0);
+  results.findings = applyEscalation(results.findings, effectiveTestFiles);
+
   await writeReportArtifacts(outDir, results, {
     baselinePath: resolvedBaseline,
     baselineMeta,

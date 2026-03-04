@@ -40,6 +40,10 @@ export type Finding = {
   totalOccurrences?: number;
   /** True total affected files (before evidence slicing). */
   affectedFiles?: number;
+  /** Original severity before prevalence escalation. Only set when escalated. */
+  baseSeverity?: "low" | "medium" | "high";
+  /** Human-readable reason for escalation. Only set when escalated. */
+  escalationReason?: string;
 };
 
 export type Inventory = {
@@ -403,7 +407,7 @@ const RULES: Rule[] = [
       /waitForLoadState\s*\(\s*['"`]networkidle['"`]\s*\)/g,
       /waitUntil\s*:\s*['"`]networkidle['"`]/g,
     ],
-    fileGlobs: ["**/*.spec.ts", "**/*.spec.js", "**/*.test.ts", "**/*.test.js", "**/POMs/**/*.ts", "**/pages/**/*.ts"],
+    fileGlobs: ["**/*.ts", "**/*.js"],
     maxEvidence: 25,
   },
   {
@@ -2306,10 +2310,12 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   const globalWrapperNames = new Map<string, string>();     // funcName → relPath
   const globalSleepMethodNames = new Map<string, string>(); // methodName → relPath
+  const nonTestContentMap = new Map<string, string>();      // absolute path → file content
 
   for (const srcFile of nonTestSourceFiles) {
     try {
       const content = await fs.readFile(srcFile, "utf8");
+      nonTestContentMap.set(srcFile, content);
       if (!SLEEP_PREFILTER_RE.test(content)) continue;
       const relPath = normalize(srcFile);
 
@@ -2403,6 +2409,25 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       }
     } catch {
       continue;
+    }
+  }
+
+  // PW-FLAKE-001 (continued): Scan non-test source files for disguised wait calls
+  if (globalWrapperNames.size > 0 || globalSleepMethodNames.size > 0) {
+    for (const [srcFile, content] of nonTestContentMap) {
+      try {
+        const relFile = normalize(srcFile);
+        const disguisedCalls = findDisguisedHardWaitCalls(
+          srcFile, content, globalWrapperNames, globalSleepMethodNames,
+        );
+        for (const d of disguisedCalls) {
+          allDisguisedWaits.push({
+            file: relFile,
+            line: d.line,
+            evidence: `Disguised hard wait: ${d.calledFunction}() is a sleep wrapper (defined in '${d.importPath}')`,
+          });
+        }
+      } catch { continue; }
     }
   }
 
@@ -2795,7 +2820,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
             "not for its content to be populated. This can return empty or stale values when text is loaded dynamically.",
           recommendation:
             "Guard retrieval calls with a web-first assertion or custom poll before extracting text:\n" +
-            "  await expect(locator).not.toHaveText('');\n" +
+            "  await expect(locator).toBeVisible();\n" +
             "  const text = await locator.innerText();\n" +
             "https://playwright.dev/docs/actionability",
           evidence: pomEvidence.slice(0, 25),
@@ -3094,8 +3119,6 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // ARCH-006: Missing API mocking capability
-  const mockingAnalysis = analyzeApiMocking([...nonFixmeTestFiles, ...filteredPomFiles], pomContentsMap);
-
   // Also check test files
   for (const testFile of nonFixmeTestFiles.slice(0, 50)) {
     try {

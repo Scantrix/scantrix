@@ -4,6 +4,8 @@ import {
   riskPointsToHealthScore,
   gradeFromHealthScore,
   isTestScoped,
+  computeFinalSeverity,
+  applyEscalation,
   type ScoreInventory,
 } from "../src/scoring";
 import type { Finding } from "../src/scanner";
@@ -257,5 +259,161 @@ describe("calculateRiskScore (density normalization)", () => {
 
     // Large sparse suite should score higher despite having more absolute findings
     expect(large.riskScore).toBeGreaterThan(small.riskScore);
+  });
+});
+
+// ── computeFinalSeverity ──
+
+describe("computeFinalSeverity", () => {
+  it("high stays high", () => {
+    const r = computeFinalSeverity("high", 50, 100);
+    expect(r.finalSeverity).toBe("high");
+    expect(r.reason).toBe("already high");
+  });
+
+  it("totalTestFiles = 0 → no escalation, null prevalence", () => {
+    const r = computeFinalSeverity("medium", 50, 0);
+    expect(r.finalSeverity).toBe("medium");
+    expect(r.prevalence).toBeNull();
+    expect(r.reason).toBe("unknown prevalence");
+  });
+
+  it("medium → high via prevalence threshold (≥25%)", () => {
+    const r = computeFinalSeverity("medium", 25, 100);
+    expect(r.finalSeverity).toBe("high");
+    expect(r.prevalence).toBe(0.25);
+    expect(r.reason).toContain("25%");
+  });
+
+  it("medium → high via absolute threshold (≥200 occurrences)", () => {
+    const r = computeFinalSeverity("medium", 200, 10000);
+    expect(r.finalSeverity).toBe("high");
+    expect(r.reason).toContain("200");
+    expect(r.reason).toContain("absolute");
+  });
+
+  it("medium → high via compound threshold (≥10% AND ≥75 occurrences)", () => {
+    const r = computeFinalSeverity("medium", 80, 500);
+    expect(r.finalSeverity).toBe("high");
+    expect(r.prevalence).toBe(0.16);
+    expect(r.reason).toContain("compound");
+  });
+
+  it("medium stays medium when compound partially met (≥10% but <75 occurrences)", () => {
+    const r = computeFinalSeverity("medium", 50, 400);
+    expect(r.finalSeverity).toBe("medium");
+    // prevalence = 12.5% >= 10%, but occurrences = 50 < 75
+    expect(r.prevalence).toBe(0.125);
+  });
+
+  it("medium stays medium below all thresholds", () => {
+    const r = computeFinalSeverity("medium", 10, 100);
+    expect(r.finalSeverity).toBe("medium");
+    expect(r.reason).toBe("below escalation thresholds");
+  });
+
+  it("low → medium via prevalence threshold (≥25%)", () => {
+    const r = computeFinalSeverity("low", 30, 100);
+    expect(r.finalSeverity).toBe("medium");
+    expect(r.reason).toContain("25%");
+  });
+
+  it("low → medium via absolute threshold (≥200 occurrences)", () => {
+    const r = computeFinalSeverity("low", 200, 10000);
+    expect(r.finalSeverity).toBe("medium");
+    expect(r.reason).toContain("200");
+    expect(r.reason).toContain("absolute");
+  });
+
+  it("low stays low below thresholds (no compound threshold for low)", () => {
+    // prevalence 15% >= 10% and 80 >= 75, but low has no compound rule
+    const r = computeFinalSeverity("low", 80, 500);
+    expect(r.finalSeverity).toBe("low");
+  });
+
+  // Boundary tests
+  it("exactly at 25% threshold → escalates", () => {
+    const r = computeFinalSeverity("medium", 25, 100);
+    expect(r.finalSeverity).toBe("high");
+  });
+
+  it("just below 25% threshold → no escalation", () => {
+    const r = computeFinalSeverity("medium", 24, 100);
+    // 24/100 = 0.24 < 0.25, and 24 < 200, and (0.24 >= 0.10 but 24 < 75)
+    expect(r.finalSeverity).toBe("medium");
+  });
+
+  it("exactly 200 occurrences → escalates", () => {
+    const r = computeFinalSeverity("medium", 200, 10000);
+    expect(r.finalSeverity).toBe("high");
+  });
+
+  it("199 occurrences with low prevalence → no escalation", () => {
+    const r = computeFinalSeverity("medium", 199, 10000);
+    // prevalence = 1.99% < 10%, occurrences = 199 < 200
+    expect(r.finalSeverity).toBe("medium");
+  });
+
+  it("high with totalTestFiles = 0 still returns high", () => {
+    const r = computeFinalSeverity("high", 50, 0);
+    expect(r.finalSeverity).toBe("high");
+    expect(r.prevalence).toBeNull();
+  });
+});
+
+// ── applyEscalation ──
+
+describe("applyEscalation", () => {
+  it("non-escalated findings returned by reference (no baseSeverity set)", () => {
+    const f = makeFinding("PW-FLAKE-001", "medium", 3);
+    const result = applyEscalation([f], 100);
+    expect(result[0]).toBe(f); // same reference
+    expect(result[0].baseSeverity).toBeUndefined();
+  });
+
+  it("escalated findings get baseSeverity + escalationReason", () => {
+    const f = makeFinding("PW-FLAKE-001", "medium", 30);
+    const result = applyEscalation([f], 100);
+    // 30/100 = 30% >= 25% → medium→high
+    expect(result[0].severity).toBe("high");
+    expect(result[0].baseSeverity).toBe("medium");
+    expect(result[0].escalationReason).toBeDefined();
+  });
+
+  it("original array not mutated", () => {
+    const f = makeFinding("PW-FLAKE-001", "medium", 30);
+    const original = [f];
+    const result = applyEscalation(original, 100);
+    expect(original[0].severity).toBe("medium"); // original unchanged
+    expect(result[0].severity).toBe("high"); // new array has escalated
+    expect(original).toHaveLength(1);
+  });
+
+  it("uses totalOccurrences when available, falls back to evidence.length", () => {
+    const withTotal: Finding = {
+      ...makeFinding("PW-FLAKE-001", "medium", 5),
+      totalOccurrences: 30,
+    };
+    const withoutTotal = makeFinding("PW-FLAKE-002", "medium", 30);
+
+    // Both should escalate: 30/100 = 30% >= 25%
+    const result = applyEscalation([withTotal, withoutTotal], 100);
+    expect(result[0].severity).toBe("high");
+    expect(result[1].severity).toBe("high");
+  });
+
+  it("effectiveTestFiles = 0 → no escalation", () => {
+    const f = makeFinding("PW-FLAKE-001", "medium", 500);
+    const result = applyEscalation([f], 0);
+    expect(result[0]).toBe(f);
+    expect(result[0].severity).toBe("medium");
+    expect(result[0].baseSeverity).toBeUndefined();
+  });
+
+  it("high findings pass through unchanged", () => {
+    const f = makeFinding("PW-FLAKE-001", "high", 50);
+    const result = applyEscalation([f], 100);
+    expect(result[0]).toBe(f);
+    expect(result[0].baseSeverity).toBeUndefined();
   });
 });

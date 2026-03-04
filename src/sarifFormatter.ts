@@ -26,13 +26,20 @@ export function toSarif(results: ScanResults): object {
   for (const f of results.findings) {
     if (seenRuleIds.has(f.findingId)) continue;
     seenRuleIds.add(f.findingId);
-    rules.push({
+    const rule: Record<string, unknown> = {
       id: f.findingId,
       shortDescription: { text: f.title },
       fullDescription: { text: f.description },
       defaultConfiguration: { level: toSarifLevel(f.severity) },
       help: { text: f.recommendation, markdown: f.recommendation },
-    });
+    };
+    if (f.baseSeverity) {
+      rule.properties = {
+        baseSeverity: f.baseSeverity,
+        escalationReason: f.escalationReason,
+      };
+    }
+    rules.push(rule);
   }
 
   const sarifResults: object[] = [];

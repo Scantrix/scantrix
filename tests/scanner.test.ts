@@ -41,6 +41,8 @@ describe("bad-repo", () => {
     expect(disguisedEvidence.some((e) => e.snippet.includes("waitForIdleNetwork()"))).toBe(true);
     // retryOperation should NOT appear (false-positive filter)
     expect(disguisedEvidence.some((e) => e.snippet.includes("retryOperation"))).toBe(false);
+    // Non-test files (page objects) should also be scanned for disguised waits
+    expect(disguisedEvidence.some((e) => e.file.includes("pages/"))).toBe(true);
   });
 
   it("detects debug pauses (PW-FLAKE-009)", () => {

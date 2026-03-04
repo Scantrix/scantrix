@@ -22,8 +22,87 @@ export interface RiskResult {
   densityInfo?: DensityInfo;
 }
 
-function severityScore(sev: "low" | "medium" | "high"): number {
+export function severityScore(sev: "low" | "medium" | "high"): number {
   return sev === "high" ? 3 : sev === "medium" ? 2 : 1;
+}
+
+// ── Prevalence-based severity escalation ─────────────────────────────
+
+export interface EscalationResult {
+  finalSeverity: "low" | "medium" | "high";
+  prevalence: number | null;
+  reason: string;
+}
+
+/**
+ * Determine whether a finding's severity should be escalated based on
+ * how widespread the pattern is across the test suite.
+ *
+ * Pure function — no side-effects.
+ */
+export function computeFinalSeverity(
+  baseSeverity: "low" | "medium" | "high",
+  occurrences: number,
+  totalTestFiles: number,
+): EscalationResult {
+  if (baseSeverity === "high") {
+    return { finalSeverity: "high", prevalence: totalTestFiles > 0 ? occurrences / totalTestFiles : null, reason: "already high" };
+  }
+
+  if (totalTestFiles <= 0) {
+    return { finalSeverity: baseSeverity, prevalence: null, reason: "unknown prevalence" };
+  }
+
+  const prevalence = occurrences / totalTestFiles;
+
+  if (baseSeverity === "medium") {
+    if (prevalence >= 0.25) {
+      return { finalSeverity: "high", prevalence, reason: `prevalence ${(prevalence * 100).toFixed(1)}% >= 25% threshold` };
+    }
+    if (occurrences >= 200) {
+      return { finalSeverity: "high", prevalence, reason: `${occurrences} occurrences >= 200 absolute threshold` };
+    }
+    if (prevalence >= 0.10 && occurrences >= 75) {
+      return { finalSeverity: "high", prevalence, reason: `prevalence ${(prevalence * 100).toFixed(1)}% >= 10% and ${occurrences} occurrences >= 75 (compound threshold)` };
+    }
+    return { finalSeverity: "medium", prevalence, reason: "below escalation thresholds" };
+  }
+
+  // baseSeverity === "low"
+  if (prevalence >= 0.25) {
+    return { finalSeverity: "medium", prevalence, reason: `prevalence ${(prevalence * 100).toFixed(1)}% >= 25% threshold` };
+  }
+  if (occurrences >= 200) {
+    return { finalSeverity: "medium", prevalence, reason: `${occurrences} occurrences >= 200 absolute threshold` };
+  }
+  return { finalSeverity: "low", prevalence, reason: "below escalation thresholds" };
+}
+
+/**
+ * Post-scan escalation pass: promote finding severity when a pattern is
+ * widespread across the test suite ("blast radius").
+ *
+ * Returns a new array. Non-escalated findings are returned by reference
+ * (no copy). Escalated findings get `baseSeverity` and `escalationReason` set.
+ * The original array is never mutated.
+ */
+export function applyEscalation(
+  findings: Finding[],
+  effectiveTestFiles: number,
+): Finding[] {
+  return findings.map((f) => {
+    const occurrences = f.totalOccurrences ?? f.evidence.length;
+    const result = computeFinalSeverity(f.severity, occurrences, effectiveTestFiles);
+    if (result.finalSeverity === f.severity) {
+      return f; // no escalation — return by reference
+    }
+    return {
+      ...f,
+      baseSeverity: f.severity,
+      severity: result.finalSeverity,
+      escalationReason: result.reason,
+    };
+  });
 }
 
 /**

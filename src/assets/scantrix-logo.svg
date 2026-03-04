@@ -1,60 +1,62 @@
-<svg xmlns="http://www.w3.org/2000/svg"
-     viewBox="250 400 5900 2350"
-     preserveAspectRatio="xMinYMid meet"
-     role="img"
-     aria-label="SCANTRIX">
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 400 4800 2205">
+
   <defs>
     <style>
-      /* Magnifying glass accent strokes */
-      .st0 { fill: #4c79f6; }
-
-      /* Magnifying glass base fill — inherits from parent so it works on any background */
-      .st4 { fill: currentColor; }
-
-      /* Wordmark */
-      .st3 {
-        font-family: Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        font-size: 950px;
-        font-weight: 700;
-        letter-spacing: 0.025em;
+      .st0 {
+        fill: #4c79f6;
       }
 
-      /* Tagline */
       .st1 {
-        font-family: Inter, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-        font-size: 182px;
+        fill: none;
+      }
+
+      .st2 {
+        display: none;
+        fill: #fff;
+      }
+
+	  .st3 {
+        fill: #fff;
+      }
+
+          /* Wordmark */
+      .st4 {
+        font-family: Roboto, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 780px;
+        font-weight: 700;
+        letter-spacing: 0.02em;
+      }
+      .st5 {
         fill: #4c79f6;
-        font-weight: 500;
-        letter-spacing: 0.08em;
+        font-family: Roboto, 'Segoe UI',Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif, 'Helvetica Neue', Arial, sans-serif;
+        font-size: 14px;
+        font-weight: 600;
+        letter-spacing: 0.01em;
       }
     </style>
   </defs>
-
-  <!-- Magnifying glass icon -->
-  <g id="icon">
-    <path id="base"    class="st4" d="M1800.32,470.46c-360.22-43.31-703.53,111.92-868.43,409.81-202.79,366.34-140.08,707.7,142.47,1024.26-60.31,52.56-120.56,105.06-185.93,162.02,35.09,35.45,59.89,60.5,91.72,92.66,66.01-59.73,127.79-115.63,195.68-177.06,177.96,108.97,369,170.54,583.06,143.58-230.35-18.09-426.4-105.56-582.71-268.7-158.59-165.53-237.47-363.55-228.88-588.51,14.35-375.51,313.19-773.52,853.01-798.06Z"/>
-    <path id="handle"  class="st0" d="M330.79,2485.74c62.06,63.97,115.51,119.05,174.28,179.63,157.04-143.23,310.66-283.34,466.6-425.57-55.48-62.47-108.38-122.04-166.51-187.5-158.9,145.19-316.97,289.62-474.38,433.44Z"/>
-    <path id="topArc"  class="st0" d="M1443.39,641.13c432.55-135.29,694.27-56.91,976.88,294.04,15.81,19.63,43.04,30.73,80.73,56.65-119.37-367.35-648.81-590.71-1057.61-350.69Z"/>
+  <g id="Layer_1">
+    <g>
+      <rect class="st2" x="664.95" y="166.48" width="4835.05" height="2667.99" transform="translate(5571.81 2988.17) rotate(179.74)"/>
+      <g>
+        <path id="base" class="st3" d="M3398.9,582.04c319.34-39.98,624.49,96.67,771.97,360.92,181.37,324.96,127.14,628.8-122.2,911.47,53.71,46.5,107.37,92.94,165.58,143.33-30.98,31.67-52.88,54.05-80.98,82.78-58.8-52.85-113.82-102.32-174.29-156.67-157.41,97.63-326.61,153.16-516.59,130.06,204.25-17.02,377.79-95.61,515.76-241.33,140-147.86,209.16-324.28,200.62-524.3-14.26-333.89-280.96-686.63-759.87-706.26Z"/>
+        <path id="handle" class="st0" d="M4710.59,2368.29c-54.79,57.14-101.97,106.34-153.86,160.45-139.88-126.74-276.71-250.72-415.61-376.57,48.95-55.78,95.63-108.97,146.93-167.43,141.54,128.48,282.33,256.27,422.54,383.54Z"/>
+        <path id="topArc" class="st0" d="M3716.18,732.36c-384.22-118.56-616.05-47.78-865.29,265.47-13.94,17.52-38.05,27.5-71.38,50.7,104.38-327.18,573.08-527.97,936.67-316.18Z"/>
+      </g>
+    </g>
   </g>
+  <g id="text">
+    <rect class="st1" x="3185.15" y="1985.38" width="5.39" height="26.29"/>
+    <rect class="st1" x="1453.2" y="1914.89" width=".33" height="68.42"/>
+    <rect class="st1" x="4206.47" y="1990.86" width="10.29" height="47.42"/>
+  </g>
+	<!-- Wordmark: single text element — browser handles natural kerning -->
+  <g>
+	<text class="st4" x="59" y="1700">
+		<tspan fill="#e5e7eb">SC</tspan><tspan fill="#e5e7eb">&#923;</tspan><tspan fill="#e5e7eb">NTRIX</tspan>
+	</text>
 
-  <!-- Wordmark: single text element — browser handles natural kerning -->
-  <text class="st3" x="1280" y="1750">
-    <tspan fill="currentColor">SC</tspan><tspan fill="currentColor">&#923;</tspan><tspan fill="currentColor">NTR</tspan>
-  </text>
-
-    <!-- dot over the "i" -->
-    <circle cx="5286" cy="1160" r="77" fill="#4c79f6" opacity="0.9"/>
-
-     <!-- Decorative accent line used as the i -->
-    <rect x="5210" y="1300" width="151" height="460" rx="1" fill="currentColor" opacity="0.9"/>
-
-  <text class="st3" x="5450" y="1750">
-    <tspan fill="currentColor">X</tspan>
-  </text>
-
-
-  <!-- Tagline: font-size set directly, no scale() transform -->
-  <!--
-  <text class="st1" x="1620" y="1910.47">AUTOMATION FRAMEWORK DIAGNOSTICS</text>
-  -->
+  <text class="st5" transform="translate(520.46 1980.79) scale(18)"><tspan x="0" y="0"></tspan>SCAN.ANALYZE.RESOLVE</text>
+  </g>
 </svg>

@@ -872,6 +872,45 @@ test('guarded', async ({ page }) => {
     expect(results).toHaveLength(0);
   });
 
+  it("does NOT flag retrieval preceded by toBeVisible guard", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await expect(page.locator('.title')).toBeVisible();
+  const text = await page.locator('.title').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by .waitFor()", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await page.locator('.title').waitFor();
+  const text = await page.locator('.title').innerText();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by .waitFor({ state: 'visible' })", () => {
+    const source = `
+import { test, expect } from '@playwright/test';
+test('guarded', async ({ page }) => {
+  await page.goto('/details');
+  await page.locator('.price').waitFor({ state: 'visible' });
+  const price = await page.locator('.price').textContent();
+});
+`;
+    const results = findUnguardedRetrievalMethods("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
   it("does NOT flag retrieval preceded by toPass guard", () => {
     const source = `
 import { test, expect } from '@playwright/test';
@@ -1026,6 +1065,33 @@ export async function getValueSafe(page: any) {
 }
 `;
     const results = findUnguardedRetrievalMethodsInFunctions("utils/helpers.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by .waitFor() in page class", () => {
+    const source = `
+export class DashboardPage {
+  async getTitle(page: any) {
+    await page.locator('.title').waitFor();
+    return await page.locator('.title').innerText();
+  }
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("pages/dashboard.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag retrieval preceded by toBeVisible in page class", () => {
+    const source = `
+import { expect } from '@playwright/test';
+export class DashboardPage {
+  async getTitle(page: any) {
+    await expect(page.locator('.title')).toBeVisible();
+    return await page.locator('.title').innerText();
+  }
+}
+`;
+    const results = findUnguardedRetrievalMethodsInFunctions("pages/dashboard.ts", source);
     expect(results).toHaveLength(0);
   });
 });

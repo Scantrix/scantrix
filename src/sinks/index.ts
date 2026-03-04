@@ -30,6 +30,5 @@ export function buildSinks(config: SinkConfig): Sink[] {
   return sinks;
 }
 
-export type { Sink } from "./types";
 export type { ScanResult } from "../scanResult";
 export { JsonSink } from "./jsonSink";

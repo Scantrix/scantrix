@@ -1155,20 +1155,30 @@ const RETRIEVAL_METHODS = new Set([
 ]);
 
 const CONTENT_GUARD_MATCHERS = new Set([
-  "toHaveText", "toContainText", "toBeEmpty",
+  "toHaveText", "toContainText", "toBeEmpty", "toBeVisible",
 ]);
 
 /**
  * Check whether a CallExpression is a content-guard assertion.
  *
- * Content guards are `expect()` chains whose final matcher is one of
- * `toHaveText`, `toContainText`, `toBeEmpty`, or `toPass` — including
- * negated forms (`.not.toHaveText(...)`) and `.resolves`/`.rejects`.
+ * Content guards are:
+ * 1. `expect()` chains whose final matcher is one of `toHaveText`,
+ *    `toContainText`, `toBeEmpty`, `toBeVisible`, or `toPass` — including
+ *    negated forms (`.not.toHaveText(...)`) and `.resolves`/`.rejects`.
+ * 2. Direct `locator.waitFor()` calls — these wait for the element to reach
+ *    an actionable state (default: "visible"), ensuring content is ready.
  */
 function isContentGuard(node: ts.Node): boolean {
   if (!ts.isCallExpression(node)) return false;
   const methodName = getFinalMethodName(node);
   if (!methodName) return false;
+
+  // locator.waitFor() is a guard (waits for "visible" state by default)
+  if (methodName === "waitFor") {
+    // Accept if it's NOT inside an expect() chain — i.e. it's a direct locator call
+    const kind = getExpectChainKind(node);
+    if (kind === undefined) return true;
+  }
 
   // toPass() is a guard regardless of chain root
   if (methodName === "toPass") {

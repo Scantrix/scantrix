@@ -3,12 +3,12 @@ import path from "path";
 import { execSync } from "child_process";
 import type { Finding, Inventory } from "./scanner";
 
-export type InventoryDelta = {
+type InventoryDelta = {
   totalFiles: { prev: number; curr: number };
   testFiles: { prev: number; curr: number };
 };
 
-export type DiffResult = {
+type DiffResult = {
   newFindings: Finding[];
   resolvedFindings: Finding[];
   persistentFindings: Finding[];
@@ -23,7 +23,7 @@ export type DiffResult = {
   inventoryDelta?: InventoryDelta;
 };
 
-export type EvidenceChange = {
+type EvidenceChange = {
   findingId: string;
   title: string;
   addedEvidence: number;
@@ -74,7 +74,7 @@ export function getGitInfo(repoPath?: string): { branch?: string; commit?: strin
   }
 }
 
-export type SaveSnapshotOptions = {
+type SaveSnapshotOptions = {
   riskScore?: number;
   inventory?: Inventory;
   /** Path to the scanned repo (used for git metadata) */
@@ -193,7 +193,7 @@ function normalizeEvidenceKey(file: string, line: number): string {
   return `${file.toLowerCase().replace(/\\/g, "/")}:${line}`;
 }
 
-export type ComputeDiffOptions = {
+type ComputeDiffOptions = {
   /** Baseline inventory (from previous meta.json) */
   baselineInventory?: { totalFiles?: number; testFiles?: number };
   /** Current inventory from this scan */

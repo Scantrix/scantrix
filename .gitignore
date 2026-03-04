@@ -29,3 +29,10 @@ Thumbs.db
 # Dev scratch files
 notes.txt
 assets/_preview.html
+scantrixDBqueries.txt
+
+# Tool / debug artifacts
+.playwright-mcp/
+
+# Database (generated)
+dashboard/data/
