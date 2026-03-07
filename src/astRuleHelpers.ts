@@ -33,6 +33,15 @@ export interface ManualContextResult {
   count: number;
 }
 
+export interface LargeInlineDataResult {
+  file: string;
+  line: number;
+  endLine: number;
+  lineCount: number;
+  symbolName: string;
+  nodeType: "object" | "array";
+}
+
 export interface DataMutationResult {
   file: string;
   line: number;
@@ -366,8 +375,27 @@ export function findCustomAssertionWrappers(
 // ─── PW-STABILITY-008: Manual Browser Context in Test Bodies ─────────
 
 /**
+ * Check if a node is inside a VariableDeclaration within the given boundary.
+ * Used to distinguish locally-declared contexts (const/let/var inside test body)
+ * from assignments to outer-scoped variables (describe-level, accessible to afterAll).
+ */
+function isLocallyDeclared(node: ts.Node, boundary: ts.Node): boolean {
+  let current = node.parent;
+  while (current && current !== boundary) {
+    if (ts.isVariableDeclaration(current)) return true;
+    current = current.parent;
+  }
+  return false;
+}
+
+/**
  * Detect `browser.newContext()` calls inside test() callbacks.
  * Fixtures handle lifecycle automatically (including failure scenarios).
+ *
+ * Only flags calls where the context is locally declared (const/let/var)
+ * inside the test body. Assignments to outer-scoped variables (declared in
+ * describe scope) are skipped because afterAll/afterEach can access them
+ * for cleanup.
  */
 export function findManualContextInTestBodies(
   filePath: string,
@@ -424,7 +452,11 @@ export function findManualContextInTestBodies(
       return;
     }
 
-    // Count browser.newContext() and request.newContext() calls in the callback body
+    // Count browser.newContext() and request.newContext() calls in the callback body.
+    // Only count calls where the result is locally declared (const/let/var) inside
+    // the test body. If assigned to an outer-scoped variable (describe level),
+    // afterAll/afterEach can clean it up — skip those.
+    const bodyBlock = callback.body;
     let newContextCount = 0;
     let firstLine = 0;
     function walkBody(n: ts.Node): void {
@@ -436,14 +468,16 @@ export function findManualContextInTestBodies(
         (n.expression.expression.text === "browser" ||
          n.expression.expression.text === "request")
       ) {
-        newContextCount++;
-        if (firstLine === 0) {
-          firstLine = lineOf(sf, n.getStart());
+        if (isLocallyDeclared(n, bodyBlock)) {
+          newContextCount++;
+          if (firstLine === 0) {
+            firstLine = lineOf(sf, n.getStart());
+          }
         }
       }
       ts.forEachChild(n, walkBody);
     }
-    walkBody(callback.body);
+    walkBody(bodyBlock);
 
     if (newContextCount > 0) {
       results.push({
@@ -1631,4 +1665,105 @@ export function analyzePomClassStructure(
     totalMethodCount,
     isLocatorBag,
   };
+}
+
+// ─── ARCH-008: Large Inline Data Literals ────────────────────────────
+
+/**
+ * Check whether an ObjectLiteralExpression or ArrayLiteralExpression is
+ * "data-like": mostly primitives / nested object-arrays, no function or
+ * class values. Returns false if any element is an arrow function,
+ * function expression, or class expression.
+ */
+function isDataLike(node: ts.ObjectLiteralExpression | ts.ArrayLiteralExpression): boolean {
+  const children: ts.NodeArray<ts.Node> = ts.isObjectLiteralExpression(node)
+    ? node.properties
+    : node.elements;
+  for (const child of children) {
+    if (ts.isArrowFunction(child) || ts.isFunctionExpression(child) || ts.isClassExpression(child)) {
+      return false;
+    }
+    if (ts.isPropertyAssignment(child)) {
+      const init = child.initializer;
+      if (ts.isArrowFunction(init) || ts.isFunctionExpression(init) || ts.isClassExpression(init)) {
+        return false;
+      }
+    }
+    if (ts.isSpreadAssignment(child) || ts.isSpreadElement(child)) {
+      // Spread from an import (e.g. ...basePayload) is fine — skip deep check
+      continue;
+    }
+  }
+  return true;
+}
+
+/**
+ * Infer a symbol name for the variable/property that holds the literal.
+ * Walks up through parents: VariableDeclaration → name, PropertyAssignment → name,
+ * ExportAssignment → "default", otherwise "(anonymous)".
+ */
+function inferSymbolName(node: ts.Node): string {
+  const parent = node.parent;
+  if (!parent) return "(anonymous)";
+
+  if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+    return parent.name.text;
+  }
+  if (ts.isPropertyAssignment(parent) && ts.isIdentifier(parent.name)) {
+    return parent.name.text;
+  }
+  if (ts.isPropertyAssignment(parent) && ts.isStringLiteral(parent.name)) {
+    return parent.name.text;
+  }
+  if (ts.isExportAssignment(parent)) {
+    return "default";
+  }
+  // `as const` satisfies: unwrap one level
+  if (ts.isAsExpression(parent) || ts.isSatisfiesExpression(parent)) {
+    return inferSymbolName(parent);
+  }
+  return "(anonymous)";
+}
+
+/**
+ * Find large inline object/array literals (≥ threshold lines) in a source file.
+ * Only counts ObjectLiteralExpression and ArrayLiteralExpression nodes that are
+ * data-like (no function values). Ignores function bodies, class bodies, type
+ * declarations, and import/export blocks.
+ */
+export function findLargeInlineDataLiterals(
+  filePath: string,
+  content: string,
+  threshold: number = 50,
+): LargeInlineDataResult[] {
+  const sf = parseSource(filePath, content);
+  const results: LargeInlineDataResult[] = [];
+
+  function visit(node: ts.Node): void {
+    // Only inspect object and array literal expressions
+    if (
+      (ts.isObjectLiteralExpression(node) || ts.isArrayLiteralExpression(node)) &&
+      isDataLike(node)
+    ) {
+      const startLine = lineOf(sf, node.getStart());
+      const endLine = lineOf(sf, node.getEnd());
+      const lineCount = endLine - startLine + 1;
+
+      if (lineCount >= threshold) {
+        results.push({
+          file: filePath,
+          line: startLine,
+          endLine,
+          lineCount,
+          symbolName: inferSymbolName(node),
+          nodeType: ts.isObjectLiteralExpression(node) ? "object" : "array",
+        });
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  }
+
+  visit(sf);
+  return results;
 }

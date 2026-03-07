@@ -27,7 +27,7 @@
 | PW-STABILITY-005 | Browser/request resource leak risk | 🟠 MEDIUM | Manual browser/context/page/request creation without cleanup (.close()/.dispose()) in afterEach/afterAll |
 | PW-STABILITY-006 | Too many assertions per test | 🟡 LOW | >5 expect() calls in a single test body (≥3 tests over threshold) |
 | PW-STABILITY-007 | Variable shadowing between scopes | 🔴 HIGH | `let`/`var` in describe scope shadowed by declaration in nested test/hook |
-| PW-STABILITY-008 | Manual browser/request context in tests | 🟠 MEDIUM | `browser.newContext()` / `request.newContext()` in test bodies instead of fixtures |
+| PW-STABILITY-008 | Manual browser/request context in tests | 🟠 MEDIUM | Locally-declared `browser.newContext()` / `request.newContext()` in test bodies instead of fixtures (skips assignments to describe-scoped variables) |
 
 ### Locator Findings (PW-LOC-*)
 | ID | Title | Severity | Description |
@@ -55,7 +55,7 @@
 | PW-INSIGHT-007 | High fixed workers | 🟡 LOW | workers hardcoded > 8 |
 | PW-INSIGHT-008 | Debugging black hole | 🔴/🟠 HIGH/MED | Retries enabled + 2+ debug mechanisms missing |
 | PW-INSIGHT-010 | Hardcoded URLs w/o baseURL | 🟠/🔴 MED/HIGH | Hardcoded URLs detected without baseURL configuration |
-| PW-INSIGHT-011 | "Green but useless" tests | 🔴 HIGH | No assertions + retries enabled |
+| PW-INSIGHT-011 | Passes without explicit checks | 🔴 HIGH | No assertions + retries enabled |
 | PW-INSIGHT-012 | Scale vs parallelism mismatch | 🔴 HIGH | ≥500 test files with workers ≤ 2 |
 | PW-INSIGHT-013 | E2E-only strategy | 🟡 LOW | Most tests use full URLs, no component/API layer |
 | PW-INSIGHT-014 | Missing forbidOnly | 🔴 HIGH | Config lacks `forbidOnly` — test.only() can leak to CI |
@@ -92,7 +92,7 @@
 | ARCH-005a | Hardcoded emails | 🟡 LOW | Email addresses hardcoded in tests |
 | ARCH-006 | No API mocking | 🟡 LOW | No page.route() usage detected |
 | ARCH-007 | No custom error types | 🟡 LOW | Generic Error throws without custom classes |
-| ARCH-008 | Large inline test data | 🟠 MEDIUM | Data blocks ≥50 lines inline in test files (≥2 files) |
+| ARCH-008 | Large inline test data | 🟠 MEDIUM | Object/array literal ≥50 lines inline in test files (≥2 files); ignores function bodies and non-data objects |
 | ARCH-009 | Inline config overrides | 🟡 LOW | timeout/retries set inline in test() calls (≥3 occurrences) |
 | ARCH-010 | Hardcoded inline test data | 🟡 LOW | Variable-anchored inline data (usernames, addresses, dates, prices) in ≥2 files |
 | ARCH-011 | Emoji characters in log messages | 🟡 LOW | `console.log/warn/error/info/debug()` calls containing emoji/pictographic characters |
@@ -155,7 +155,7 @@
 8. **PW-STABILITY-003** - Shared browser state risk: `page` used in `beforeAll`
 9. **PW-STABILITY-004** - Tests without assertions are "green noise" providing zero quality signal
 10. **PW-INSIGHT-008** - Debugging black hole: retries without debug artifacts
-11. **PW-INSIGHT-011** - "Green but useless" tests: no assertions + retries = false confidence
+11. **PW-INSIGHT-011** - Passes without explicit checks: no assertions + retries = false confidence
 12. **ARCH-003** - Test coupling creates fragile, unpredictable tests
 13. **ARCH-005** - Hardcoded credentials are a security and maintainability risk
 14. **ARCH-012** - Mutating shared imported data objects breaks parallel execution

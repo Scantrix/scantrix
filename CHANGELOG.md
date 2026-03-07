@@ -1,5 +1,30 @@
 # Changelog
 
+## [6.3.2] - 2026-03-04
+
+### PW-STABILITY-008: Reduce false positives for describe-scoped context variables
+
+- **Refined detection**: `PW-STABILITY-008` now only flags `browser.newContext()` /
+  `request.newContext()` calls inside `test()` bodies when the result is **locally declared**
+  (`const`/`let`/`var`) within the test callback. Assignments to outer-scoped variables
+  (declared with `let` in `test.describe()` scope) are excluded because `afterAll`/`afterEach`
+  can access them for proper cleanup.
+- **False positive elimination**: Tests using the common pattern of declaring `let ctx: BrowserContext`
+  at describe scope, creating the context in a test or `beforeAll`, and cleaning up in `afterAll`
+  are no longer flagged.
+
+### ARCH-008: Replace brace-counting heuristic with AST-based detection
+
+- **Eliminated false positives**: The old heuristic counted all `{`/`[` … `}`/`]` pairs including
+  function bodies (`test.describe`, `beforeAll`, `test` callbacks), class bodies, and if-blocks.
+  Files with no inline data (e.g., TC-100002 spec — 77-line describe body) were wrongly flagged.
+- **AST-based detection**: Now uses `findLargeInlineDataLiterals()` with the TypeScript Compiler API
+  to detect only `ObjectLiteralExpression` and `ArrayLiteralExpression` nodes ≥50 lines.
+- **Data-likeness filter**: Objects with arrow function / function expression properties are excluded
+  (not data — they're handler maps, config objects, etc.).
+- **Improved evidence**: Reports symbol name, node type (object/array), and exact line range
+  (`L<start>–L<end>`) instead of the previous hardcoded `line: 1`.
+
 ## [6.3.1] - 2026-03-02
 
 ### ARCH-002: AST-based "locator bag" detection
@@ -922,7 +947,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 
 | ID | Title | Triggers |
 |----|-------|----------|
-| PW-INSIGHT-011 | "Green but useless" tests | No assertions + retries enabled |
+| PW-INSIGHT-011 | Passes without explicit checks | No assertions + retries enabled |
 | PW-INSIGHT-012 | Scale vs parallelism mismatch | ≥500 tests + workers ≤ 2 |
 | PW-INSIGHT-013 | E2E-only test strategy | Most tests use full URLs, no baseURL |
 

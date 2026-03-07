@@ -218,9 +218,9 @@ body {
   display: flex; flex-direction: column;
 }
 .sidebar-brand { padding: 0 var(--space-5); margin-bottom: var(--space-5); }
-.sidebar-brand img { max-width: 140px; height: auto; }
+.sidebar-brand img { max-width: 190px; height: auto; }
 .sidebar-brand .brand-logo { display: block; color: var(--color-text); }
-.sidebar-brand .brand-logo svg { width: 140px; height: auto; display: block; }
+.sidebar-brand .brand-logo svg { width: 190px; height: auto; display: block; }
 .sidebar-brand .brand-text {
   font-size: 15px; font-weight: 700; color: var(--color-text); letter-spacing: -0.02em;
 }
@@ -890,7 +890,6 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
   // Try co-located src/assets first, then fall back to project root assets.
   const candidates = [
     path.join(__dirname, "assets", "scantrix-sidebar.svg"),
-    // path.join(process.cwd(), "src", "assets", "scantrix-sidebar.svg"),
     path.join(process.cwd(), "src", "assets", "scantrix-logo.svg"),
   ];
   for (const p of candidates) {

@@ -12,6 +12,7 @@ import {
   findDisguisedHardWaitCalls,
   findClassSleepMethodExports,
   analyzePomClassStructure,
+  findLargeInlineDataLiterals,
 } from "../src/astRuleHelpers";
 
 // ─── PW-STABILITY-007: Variable Shadowing ────────────────────────────
@@ -246,6 +247,82 @@ test('mixed contexts', async ({ browser, request }) => {
     const results = findManualContextInTestBodies("test.spec.ts", source);
     expect(results).toHaveLength(1);
     expect(results[0].count).toBe(2);
+  });
+
+  it("skips newContext assigned to describe-scoped variable (outer let)", () => {
+    const source = `
+import { test, BrowserContext } from '@playwright/test';
+
+test.describe('suite', () => {
+  let dcContext: BrowserContext;
+
+  test.beforeAll(async ({ browser }) => {
+    dcContext = await browser.newContext({ storageState: 'state.json' });
+  });
+
+  test('uses outer context in test body', async ({ browser }) => {
+    dcContext = await browser.newContext({ storageState: 'other.json' });
+  });
+
+  test.afterAll(async () => {
+    await dcContext?.close();
+  });
+});
+`;
+    const results = findManualContextInTestBodies("test.spec.ts", source);
+    expect(results).toHaveLength(0);
+  });
+
+  it("flags locally declared context but skips outer-scoped assignment in same test", () => {
+    const source = `
+import { test, BrowserContext } from '@playwright/test';
+
+test.describe('suite', () => {
+  let outerCtx: BrowserContext;
+
+  test('mixed scoping', async ({ browser }) => {
+    outerCtx = await browser.newContext();
+    const localCtx = await browser.newContext();
+  });
+
+  test.afterAll(async () => {
+    await outerCtx?.close();
+  });
+});
+`;
+    const results = findManualContextInTestBodies("test.spec.ts", source);
+    expect(results).toHaveLength(1);
+    expect(results[0].count).toBe(1);
+    expect(results[0].testName).toBe("mixed scoping");
+  });
+
+  it("skips newContext in beforeAll with describe-scoped vars (multi-context setup)", () => {
+    const source = `
+import { test, Page, BrowserContext } from '@playwright/test';
+
+test.describe('multi-app test', () => {
+  let ctx1: BrowserContext;
+  let ctx2: BrowserContext;
+  let page1: Page;
+
+  test.beforeAll(async ({ browser }) => {
+    ctx1 = await browser.newContext({ storageState: 'user1.json' });
+    ctx2 = await browser.newContext({ storageState: 'user2.json' });
+    page1 = await ctx1.newPage();
+  });
+
+  test('uses pre-created contexts', async () => {
+    await page1.goto('/dashboard');
+  });
+
+  test.afterAll(async () => {
+    await ctx1?.close();
+    await ctx2?.close();
+  });
+});
+`;
+    const results = findManualContextInTestBodies("test.spec.ts", source);
+    expect(results).toHaveLength(0);
   });
 });
 
@@ -1286,5 +1363,98 @@ export class ProductPage {
     expect(result!.actionMethodCount).toBe(0);
     expect(result!.totalMethodCount).toBe(0);
     expect(result!.isLocatorBag).toBe(true);
+  });
+});
+
+// ─── ARCH-008: Large Inline Data Literals ────────────────────────────
+
+describe("findLargeInlineDataLiterals", () => {
+  // Helper to generate an N-line object literal source
+  function makeObjectSource(name: string, lines: number): string {
+    const props = Array.from({ length: lines - 2 }, (_, i) => `  prop${i}: 'value${i}',`).join("\n");
+    return `const ${name} = {\n${props}\n};`;
+  }
+
+  function makeArraySource(name: string, lines: number): string {
+    const elems = Array.from({ length: lines - 2 }, (_, i) => `  'item${i}',`).join("\n");
+    return `const ${name} = [\n${elems}\n];`;
+  }
+
+  it("flags a large object literal (>=50 lines)", () => {
+    const source = makeObjectSource("hugePayload", 55);
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(1);
+    expect(results[0].symbolName).toBe("hugePayload");
+    expect(results[0].nodeType).toBe("object");
+    expect(results[0].lineCount).toBe(55);
+    expect(results[0].line).toBe(1);
+  });
+
+  it("does NOT flag a large describe block with no large literals", () => {
+    // 80-line describe callback body — should not be flagged
+    const bodyLines = Array.from({ length: 75 }, (_, i) => `  await page.goto('/page${i}');`).join("\n");
+    const source = `import { test } from '@playwright/test';
+
+test.describe('suite', () => {
+${bodyLines}
+});`;
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag a large beforeAll/test callback body", () => {
+    const bodyLines = Array.from({ length: 60 }, (_, i) => `    await page.click('#btn${i}');`).join("\n");
+    const source = `import { test } from '@playwright/test';
+
+test('long test', async ({ page }) => {
+${bodyLines}
+});`;
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(0);
+  });
+
+  it("does NOT flag a medium payload below threshold", () => {
+    const source = makeObjectSource("smallPayload", 30);
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(0);
+  });
+
+  it("flags a large array literal fixture", () => {
+    const source = makeArraySource("testFixtures", 60);
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(1);
+    expect(results[0].symbolName).toBe("testFixtures");
+    expect(results[0].nodeType).toBe("array");
+    expect(results[0].lineCount).toBe(60);
+  });
+
+  it("does NOT flag a large object with function properties (not data-like)", () => {
+    const fns = Array.from({ length: 55 }, (_, i) =>
+      `  handler${i}: () => console.log(${i}),`
+    ).join("\n");
+    const source = `const actions = {\n${fns}\n};`;
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(0);
+  });
+
+  it("correctly identifies the largest literal when multiple exist", () => {
+    const small = makeObjectSource("smallData", 20);
+    const large = makeObjectSource("largeData", 70);
+    const medium = makeObjectSource("mediumData", 55);
+    const source = `${small}\n\n${large}\n\n${medium}`;
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    // Should find 2 literals >= 50 lines
+    expect(results).toHaveLength(2);
+    const largest = results.reduce((a, b) => a.lineCount > b.lineCount ? a : b);
+    expect(largest.symbolName).toBe("largeData");
+    expect(largest.lineCount).toBe(70);
+  });
+
+  it("infers symbol name through 'as const' / satisfies", () => {
+    const props = Array.from({ length: 53 }, (_, i) => `  k${i}: ${i},`).join("\n");
+    const source = `const config = {\n${props}\n} as const;`;
+    const results = findLargeInlineDataLiterals("test.spec.ts", source, 50);
+    expect(results).toHaveLength(1);
+    expect(results[0].symbolName).toBe("config");
   });
 });

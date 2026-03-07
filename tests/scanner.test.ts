@@ -254,12 +254,12 @@ describe("bad-repo", () => {
 
   // ── Inventory ──────────────────────────────────────────────────
   it("counts test files correctly", () => {
-    expect(results.inventory.testFiles).toBe(12);
+    expect(results.inventory.testFiles).toBe(13);
   });
 
   it("counts individual test cases across files", () => {
     expect(results.inventory.testCases).toBeDefined();
-    expect(results.inventory.testCases).toBe(46);
+    expect(results.inventory.testCases).toBe(47);
   });
 
   it("detects Playwright config", () => {

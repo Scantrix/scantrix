@@ -211,9 +211,9 @@ Variables declared with `let`/`var` in a `test.describe()` scope that are re-dec
 | Severity | **Medium** |
 | Category | Stability |
 | Analysis | AST-based: detects `browser.newContext()` and `request.newContext()` calls inside `test()` callbacks |
-| Scope | Excludes hooks (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`) |
+| Scope | Excludes hooks (`beforeAll`, `afterAll`, `beforeEach`, `afterEach`); excludes assignments to outer-scoped variables (describe-level `let`) |
 
-Tests creating browser or API request contexts manually via `browser.newContext()` / `request.newContext()` instead of using Playwright fixtures. Manual lifecycle management is fragile — contexts are not cleaned up (`.close()` / `.dispose()`) on test failure, causing resource leaks and connection exhaustion. Differs from PW-STABILITY-005 (which flags missing cleanup) in that this flags the manual pattern itself.
+Tests creating browser or API request contexts manually via `browser.newContext()` / `request.newContext()` instead of using Playwright fixtures. Only flags contexts that are **locally declared** (`const`/`let`/`var`) inside the test body — these are inaccessible to `afterAll`/`afterEach` for cleanup. Assignments to describe-scoped variables (`outerCtx = await browser.newContext()`) are excluded because the variable is accessible to hooks for proper lifecycle management. Differs from PW-STABILITY-005 (which flags missing cleanup) in that this flags the manual pattern itself.
 
 ---
 
@@ -440,7 +440,7 @@ POM classes without custom error classes for better failure diagnostics.
 |----------|-------|
 | Severity | **Medium** |
 | Category | Architecture |
-| Analysis | Large inline data blocks (>=50 lines) |
+| Analysis | AST-based: detects `ObjectLiteralExpression` and `ArrayLiteralExpression` nodes ≥50 lines; ignores function bodies, class bodies, and non-data objects with function properties |
 
 Large data blocks inline in test files. Extract to JSON fixtures or data factories.
 
@@ -702,7 +702,7 @@ Unreliable waits are compounding each other.
 
 Environment switching is brittle, especially at scale.
 
-### PW-INSIGHT-011 — "Green but useless" tests
+### PW-INSIGHT-011 — Passes without explicit checks
 | Property | Value |
 |----------|-------|
 | Severity | **High** |

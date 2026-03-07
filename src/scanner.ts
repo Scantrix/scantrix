@@ -24,6 +24,7 @@ import {
   findDisguisedHardWaitCalls,
   findClassSleepMethodExports,
   analyzePomClassStructure,
+  findLargeInlineDataLiterals,
 } from "./astRuleHelpers";
 import type { PomClassAnalysis } from "./astRuleHelpers";
 
@@ -611,7 +612,7 @@ const RULES: Rule[] = [
     title: "Debug pause left in code (page.pause)",
     severity: "high",
     description:
-      "page.pause() halts test execution and opens the Playwright Inspector. It is a debug-only method that must be removed before committing — any test containing it will hang indefinitely in CI.",
+      "page.pause() halts test execution and opens the Playwright Inspector. It is a debug-only method that must be removed before committing. Any test containing it, will hang indefinitely in CI.",
     recommendation:
       "Remove all page.pause() calls. Use Playwright's trace viewer or --debug flag for local debugging instead.\nhttps://playwright.dev/docs/debug",
     patterns: [/\.pause\s*\(\s*\)/g],
@@ -2627,41 +2628,25 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // ============================================
-  // ARCH-008: Large inline test data
+  // ARCH-008: Large inline test data (AST-based)
   // ============================================
-  const largeInlineDataFiles: Array<{ file: string; largestBlock: number }> = [];
+  const largeInlineDataFiles: Array<{ file: string; line: number; endLine: number; largestBlock: number; symbolName: string; nodeType: string }> = [];
 
   for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
     try {
       const content = await fs.readFile(testFile, "utf8");
-      const lines = content.split(/\r?\n/);
-
-      // Detect large array/object literals (heuristic: find [ or { and count lines until close)
-      let maxBlockSize = 0;
-      let depth = 0;
-      let blockStart = -1;
-
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        for (const ch of line) {
-          if (ch === "{" || ch === "[") {
-            if (depth === 0) blockStart = i;
-            depth++;
-          }
-          if (ch === "}" || ch === "]") {
-            depth--;
-            if (depth === 0 && blockStart >= 0) {
-              const size = i - blockStart + 1;
-              if (size > maxBlockSize) maxBlockSize = size;
-              blockStart = -1;
-            }
-          }
-        }
-      }
-
-      // Only flag if a single inline data block exceeds 50 lines
-      if (maxBlockSize >= 50) {
-        largeInlineDataFiles.push({ file: normalize(testFile), largestBlock: maxBlockSize });
+      const literals = findLargeInlineDataLiterals(testFile, content, 50);
+      if (literals.length > 0) {
+        // Pick the largest literal in the file
+        const largest = literals.reduce((a, b) => a.lineCount > b.lineCount ? a : b);
+        largeInlineDataFiles.push({
+          file: normalize(testFile),
+          line: largest.line,
+          endLine: largest.endLine,
+          largestBlock: largest.lineCount,
+          symbolName: largest.symbolName,
+          nodeType: largest.nodeType,
+        });
       }
     } catch {
       continue;
@@ -2677,10 +2662,10 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         `${largeInlineDataFiles.length} test file(s) contain large inline data blocks (50+ lines). Embedding test data in test files reduces readability, makes data reuse difficult, and bloats test files.`,
       recommendation:
         "Extract large data into separate fixture files (e.g., /fixtures/testData.json or /data/ folder). Use test.use() or custom fixtures to load data. This improves readability and enables data sharing across tests.",
-      evidence: largeInlineDataFiles.slice(0, 10).map(({ file, largestBlock }) => ({
+      evidence: largeInlineDataFiles.slice(0, 10).map(({ file, line, endLine, largestBlock, symbolName, nodeType }) => ({
         file,
-        line: 1,
-        snippet: `Largest inline data block: ${largestBlock} lines`,
+        line,
+        snippet: `${symbolName}: ${nodeType} literal (${largestBlock} lines, L${line}–L${endLine})`,
       })),
       totalOccurrences: largeInlineDataFiles.length,
       affectedFiles: largeInlineDataFiles.length,
@@ -3313,7 +3298,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
         severity: isHigh ? "high" : "medium",
         title: `Excessive retry count detected (${maxRetries} retries)`,
         description: isHigh
-          ? `Retries are set to ${maxRetries}, far above the recommended maximum (2). At this level, retries are compensating for systemic test instability — each flaky test can run up to ${maxRetries + 1} times, dramatically inflating CI duration and masking root causes.`
+          ? `Retries are set to ${maxRetries}, far above the recommended maximum (2). At this level, retries are compensating for systemic test instability and each flaky test can run up to ${maxRetries + 1} times, dramatically inflating CI duration and masking root causes. This degrades the signal-to-noise ratio of CI; both pass and fail results should be interpreted with caution.`
           : `Retries are set to ${maxRetries}, which is higher than the recommended maximum (2). Excessive retries can mask underlying flakiness and make CI runs significantly longer.`,
         recommendation:
           "Reduce retries to 1-2 maximum. Use retries to handle rare environmental flakiness, not to work around test instability. Prioritize fixing the root cause of flaky tests.",
@@ -4009,7 +3994,7 @@ const pwUsesWorkersEnv =
   }
 
   // ============================================
-  // PW-INSIGHT-011: "Green but useless" tests
+  // PW-INSIGHT-011: Passes without explicit checks
   // ============================================
   const noAssertions = hasFinding(findings, "PW-STABILITY-004");
   if (noAssertions && retriesEnabled) {
@@ -4028,7 +4013,7 @@ const pwUsesWorkersEnv =
     findings.push({
       findingId: "PW-INSIGHT-011",
       severity: "high",
-      title: '"Green but useless" tests (no assertions + retries)',
+      title: "Passes without explicit checks (no in-test assertions + retries)",
       description:
         `${stability004 ? stability004.description + " " : ""}Combined with enabled retries, these tests create an illusion of quality, they may never fail, but count toward pass rates. This is worse than having no tests and creates false confidence.`,
       recommendation:
