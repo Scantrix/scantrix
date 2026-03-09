@@ -23,6 +23,9 @@ Thumbs.db
 .vscode/
 *.swp
 
+# Claude Code
+.claude/
+
 # Binary / marketing docs
 *.docx
 

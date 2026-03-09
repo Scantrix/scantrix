@@ -144,7 +144,7 @@ export function riskPointsToHealthScore(riskPoints: number): number {
  * Map a 0–100 health score to a letter grade and human-readable level.
  * Higher score = better grade.
  *
- * Default thresholds: A (≥80), B (≥60), C (≥40), D (≥25), F (<25)
+ * Default thresholds: A (≥80), B (≥60), C (≥40), D (≥30), F (<30)
  */
 export function gradeFromHealthScore(
   score: number,
@@ -154,7 +154,7 @@ export function gradeFromHealthScore(
   if (score >= t.gradeA) return { grade: "A", level: "Excellent", description: "Well-structured framework with strong practices" };
   if (score >= t.gradeB) return { grade: "B", level: "Good", description: "Solid foundation with room for improvement" };
   if (score >= t.gradeC) return { grade: "C", level: "Fair", description: "Multiple areas need attention" };
-  if (score >= 25)       return { grade: "D", level: "Poor", description: "Significant issues affecting reliability" };
+  if (score >= 30)       return { grade: "D", level: "Poor", description: "Significant issues affecting reliability" };
   return                          { grade: "F", level: "Critical", description: "Widespread issues requiring immediate action" };
 }
 

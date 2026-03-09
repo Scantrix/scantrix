@@ -26,7 +26,7 @@ automation repositories. It scans:
 - **Framework configuration** — `playwright.config.ts`, `cypress.config.js`, etc.
 - **CI pipelines** — GitHub Actions, Azure DevOps YAML
 
-It produces **actionable, prioritized findings** with risk scores, severity grades, and
+It produces **prioritized findings** with risk scores, severity grades, and
 concrete recommendations — without ever executing your tests.
 
 ### What It Does NOT Do

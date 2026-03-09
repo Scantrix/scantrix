@@ -72,7 +72,7 @@
 - **New finding**: `PW-FLAKE-009` — detects `page.pause()` calls left in test code.
   Previously bundled under PW-FLAKE-001 (hard waits), debug pauses are fundamentally
   different: they halt execution entirely and open the Playwright Inspector, hanging
-  indefinitely in CI. Separating them gives teams a clear, actionable finding for
+  indefinitely in CI. Separating them gives teams a clear, specific finding for
   debug leftovers.
 - **PW-FLAKE-001 updated**: Title and description narrowed to hard waits only
   (`waitForTimeout` / `setTimeout`). No longer matches `page.pause()`.
@@ -523,7 +523,7 @@ with the following sections:
 | **Repository Statistics** | Total files, test files, Playwright version, config file count, detected frameworks, git branch & commit, test-file ratio bar |
 | **Severity Breakdown** | Horizontal percentage bars for high / medium / low findings |
 | **Priority Files** | Top 8 hotspot files ranked by severity-weighted score with rule badges |
-| **Recommended Actions** | Top 5 actionable recommendations derived from highest-severity findings |
+| **Recommended Actions** | Top 5 practical recommendations derived from highest-severity findings |
 | **Findings Table** | Collapsible rows with evidence (file, line, snippet), description, and recommendation |
 | **Configuration Overview** | Playwright Config (settings, runtime options, reporters, projects) and CI/CD Config (platform, feature matrix, pipeline files, infrastructure) |
 | **Scan History** | Last 20 scans with grade, finding counts, and risk score |
@@ -917,7 +917,7 @@ The engine now covers 50+ audit rules across 3 frameworks.
 ### 🚀 Major Release — Enterprise-Grade Audit Engine
 
 This release adds 13 new findings, 7 rule improvements, SARIF output, trend tracking,
-custom configuration, and a comprehensive test suite. The engine now covers 40+ audit rules.
+custom configuration, and a full test suite. The engine now covers 40+ audit rules.
 
 ---
 
@@ -979,7 +979,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 
 ### 🛠️ Technical Changes
 
-- **configExtractor**: Added `evaluateNumericExpression()` for robust timeout parsing (handles `60*1000`, `60_000`, `6e4`, `2*60*1000`)
+- **configExtractor**: Added `evaluateNumericExpression()` for reliable timeout parsing (handles `60*1000`, `60_000`, `6e4`, `2*60*1000`)
 - **ciExtractor**: New CiSummary fields: `setsCiEnvTrue`, `hasPipelineTimeout`, `pipelineTimeoutMinutes`, `hasReporterInPlaywrightCommand`
 - **report.ts**: Imports SARIF + diff modules; "Performance" category in findings table; new time estimates for all new rules
 - **scanner.ts**: Post-processing for `.auditrc.json` (rule disabling + severity overrides); insight/correlation engine expanded
@@ -1090,7 +1090,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 ### 📝 Documentation Updates
 
 - Added STABILITY-001 and STABILITY-002 to `FINDING_REFERENCE.md`
-- Added remediation Pattern 12: Test isolation with hooks (comprehensive before/after example)
+- Added remediation Pattern 12: Test isolation with hooks (full before/after example)
 - Added remediation Pattern 13: Test organization with describe blocks
 - Updated priority rankings
 - Added to executive summary action items
@@ -1112,7 +1112,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 - **Detects**: Retries configured but test-results/traces not published in CI
 - **Impact**: When retried tests fail, you have zero debug artifacts
 - **Why critical**: This was **in the handoff guide** as a must-have
-- Provides actionable guidance on publishing artifacts with `condition: always()`
+- Provides practical guidance on publishing artifacts with `condition: always()`
 
 #### PW-INSIGHT-008: The "Debugging Black Hole"
 - **Severity**: 🔴 HIGH (3 gaps) or 🟠 MEDIUM (2 gaps)
@@ -1136,7 +1136,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 
 ✅ **Completed Task**: "Add CI-007 (Retries enabled but traces not retained/published)"
 - Implemented as CI-009 (more accurate naming)
-- Plus bonus INSIGHT-008 for comprehensive debugging gap detection
+- Plus bonus INSIGHT-008 for debugging gap detection
 
 ---
 
@@ -1148,7 +1148,7 @@ custom configuration, and a comprehensive test suite. The engine now covers 40+ 
 - **Added executive summary section** at the top of audit reports with:
   - Risk level scoring (0-100+ scale) with color-coded indicators
   - Findings breakdown by severity (High/Medium/Low counts)
-  - Top 3 actionable recommendations prioritized by impact
+  - Top 3 recommendations prioritized by impact
   - Context-aware action items with specific file names and counts
 
 #### Enhanced Report Formatting
@@ -1312,7 +1312,7 @@ If you're parsing the markdown output, update your parsers to handle:
 ### For Users
 - No action required - just re-run the audit
 - New executive summary provides better prioritization
-- More actionable recommendations
+- More practical recommendations
 
 ### For Integrators  
 - JSON output has new fields (backward compatible)

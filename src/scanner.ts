@@ -2342,7 +2342,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   const allUnguardedRetrievals: Array<{ file: string; line: number; evidence: string }> = [];
   const allDisguisedWaits: Array<{ file: string; line: number; evidence: string }> = [];
 
-  for (const testFile of nonFixmeTestFiles.slice(0, 200)) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const relFile = normalize(testFile);
@@ -2583,7 +2583,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const deepCssEvidence: Evidence[] = [];
 
-  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles) {
     if (deepCssEvidence.length >= 25) break;
     try {
       const content = await fs.readFile(testFile, "utf8");
@@ -2632,7 +2632,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const largeInlineDataFiles: Array<{ file: string; line: number; endLine: number; largestBlock: number; symbolName: string; nodeType: string }> = [];
 
-  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const literals = findLargeInlineDataLiterals(testFile, content, 50);
@@ -2677,7 +2677,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const inlineConfigOverrides: Evidence[] = [];
 
-  for (const testFile of nonFixmeTestFiles.slice(0, 100)) {
+  for (const testFile of nonFixmeTestFiles) {
     if (inlineConfigOverrides.length >= 20) break;
     try {
       const content = await fs.readFile(testFile, "utf8");
@@ -3000,7 +3000,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       description:
         `${emailData.length} hardcoded email addresses found in test code. While not a security risk, hardcoded emails make it harder to run tests in different environments and can cause conflicts in parallel test runs.`,
       recommendation:
-        "Use a test data factory or faker library to generate unique email addresses per test run. For example: 'test-${Date.now()}@example.com' or use @faker-js/faker. This prevents test data conflicts and makes tests more robust.",
+        "Use a test data factory or faker library to generate unique email addresses per test run. For example: 'test-${Date.now()}@example.com' or use @faker-js/faker. This prevents test data conflicts and makes tests more reliable.",
       evidence: emailData.slice(0, 10).map(d => ({
         file: normalize(d.file),
         line: d.line,
@@ -3018,7 +3018,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
     const inlineDataFiles: Array<{ file: string; matches: InlineTestDataMatch[] }> = [];
 
     // Scope 1: Playwright test files (already have nonFixmeTestFiles + filteredPomFiles)
-    for (const file of [...nonFixmeTestFiles, ...filteredPomFiles].slice(0, 100)) {
+    for (const file of [...nonFixmeTestFiles, ...filteredPomFiles]) {
       // Skip files in fixtures/data/testdata directories (use repo-relative path to avoid
       // false matches on parent directories like tests/fixtures/bad-repo)
       const normalized = normalize(file);
@@ -3105,7 +3105,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
 
   // ARCH-006: Missing API mocking capability
   // Also check test files
-  for (const testFile of nonFixmeTestFiles.slice(0, 50)) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       pomContentsMap.set(testFile, content);
@@ -3139,7 +3139,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ARCH-007: No custom error types
   const errorAnalyses: ErrorHandlingAnalysis[] = [];
   
-  for (const pomFile of filteredPomFiles.slice(0, 50)) {
+  for (const pomFile of filteredPomFiles) {
     try {
       const content = pomContentsMap.get(pomFile) || await fs.readFile(pomFile, "utf8");
       const analysis = analyzeErrorHandling(pomFile, content);
@@ -3177,7 +3177,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // ============================================
   const allDataMutations: Array<{ file: string; line: number; evidence: string }> = [];
 
-  for (const testFile of nonFixmeTestFiles.slice(0, 200)) {
+  for (const testFile of nonFixmeTestFiles) {
     try {
       const content = await fs.readFile(testFile, "utf8");
       const mutations = findTestDataMutations(testFile, content);
@@ -3342,7 +3342,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       severity: "low",
       title: "Video capture not configured or disabled",
       description:
-        "Video recording is not enabled or is set to 'off'. Videos can be helpful for debugging, though less comprehensive than traces.",
+        "Video recording is not enabled or is set to 'off'. Videos can be helpful for debugging, though less detailed than traces.",
       recommendation:
         "Consider enabling video with 'on-first-retry' or 'retain-on-failure'. Note that traces are more useful for debugging, so if storage is a concern, prioritize traces over videos.",
       evidence: [
@@ -3845,7 +3845,7 @@ const pwUsesWorkersEnv =
     }
   }
 
-  // INSIGHT-008: The "Debugging Black Hole" - comprehensive retry debugging gap
+  // INSIGHT-008: The "Debugging Black Hole" - retry debugging gap
   if (retriesEnabled) {
     const hasTraceConfig = trace && trace !== "off";
     const hasVideoConfig = video && video !== "off";
