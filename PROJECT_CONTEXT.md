@@ -57,5 +57,3 @@ Configuration via `--json-path <path>` or `SCANTRIX_JSON_PATH` env var.
 ### Test Suite
 - Vitest test suite across 12 test files
 - Fixture repos: bad-repo, good-repo, complex-config-repo, cypress-repo, selenium-repo, deprecated-repo
-
-First review the repo_audit_agent_project_overview_handoff_guide.md

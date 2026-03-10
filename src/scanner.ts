@@ -338,7 +338,7 @@ const RULES: Rule[] = [
     description:
       "XPath selectors tend to be brittle and harder to maintain vs role/label/testid locators.",
     recommendation:
-      "Prefer getByRole/getByLabel/getByTestId and scoped locators. Introduce data-testid where needed. Focus refactoring on frequently-changed test files first. \nhttps://playwright.dev/docs/locators#quick-guide",
+      "Prefer getByRole/getByLabel/getByTestId and scoped locators. Introduce data-testid where needed. Focus refactoring on frequently changed test files first. \nhttps://playwright.dev/docs/locators#quick-guide",
     patterns: [
       /\blocator\s*\(\s*['"`]\s*\/\/[^'"`]+['"`]\s*\)/g,
       /\bpage\.locator\s*\(\s*['"`]\s*\/\/[^'"`]+['"`]\s*\)/g,
@@ -434,7 +434,7 @@ const RULES: Rule[] = [
     title: "Deprecated selector engine methods ($, $$, $eval, $$eval)",
     severity: "medium",
     description:
-      "page.$(), page.$$(), page.$eval(), page.$$eval() — and their ElementHandle equivalents — are deprecated. These methods return ElementHandle objects, which are the legacy way to interact with DOM elements. Locators are the modern, auto-waiting replacement.",
+      "page.$(), page.$$(), page.$eval(), page.$$eval() and their ElementHandle equivalents are deprecated. These methods return ElementHandle objects, which are the legacy way to interact with DOM elements. Locators are the modern, auto-waiting replacement.",
     recommendation:
       "Replace all $/$$ usage with page.locator():\n" +
       "  page.$('selector')  → page.locator('selector')\n" +
@@ -482,7 +482,7 @@ const RULES: Rule[] = [
     title: "Deprecated page.waitForNavigation() / page.waitForSelector()",
     severity: "medium",
     description:
-      "page.waitForNavigation() and page.waitForSelector() are deprecated. These are legacy wait mechanisms with race-condition risks (the event may fire before the wait is registered).",
+      "page.waitForNavigation() and page.waitForSelector() are deprecated. These are legacy wait mechanisms with race condition risks (the event may fire before the wait is registered).",
     recommendation:
       "Replace with modern equivalents:\n" +
       "  page.waitForNavigation()   → page.waitForURL('**/expected-path')\n" +
@@ -504,7 +504,7 @@ const RULES: Rule[] = [
     title: "test.describe.serial usage (isolation risk)",
     severity: "medium",
     description:
-      "test.describe.serial() creates sequential test dependencies — if one test fails, subsequent tests in the group are skipped. The Playwright docs state: 'Using serial is not recommended. It is usually better to make your tests isolated.' Note: test.describe.parallel() and test.describe.serial() are not deprecated but the modern equivalent is test.describe.configure({ mode: 'parallel' | 'serial' }).",
+      "test.describe.serial() creates sequential test dependencies, if one test fails, subsequent tests in the group are skipped. The Playwright docs state: 'Using serial is not recommended. It is usually better to make your tests isolated.' Note: test.describe.parallel() and test.describe.serial() are not deprecated but the modern equivalent is test.describe.configure({ mode: 'parallel' | 'serial' }).",
     recommendation:
       "Refactor serial test groups to be fully isolated so each test can run independently. If you need serial mode for a legitimate reason (e.g. multi-step wizard), prefer test.describe.configure({ mode: 'serial' }) which is the modern syntax.\nhttps://playwright.dev/docs/test-retries#serial-mode\nhttps://playwright.dev/docs/test-parallel",
     patterns: [
@@ -612,7 +612,7 @@ const RULES: Rule[] = [
     title: "Debug pause left in code (page.pause)",
     severity: "high",
     description:
-      "page.pause() halts test execution and opens the Playwright Inspector. It is a debug-only method that must be removed before committing. Any test containing it, will hang indefinitely in CI.",
+      "page.pause() halts test execution and opens the Playwright Inspector. It is a debug only method that must be removed before committing. Any test containing it, will hang indefinitely in CI.",
     recommendation:
       "Remove all page.pause() calls. Use Playwright's trace viewer or --debug flag for local debugging instead.\nhttps://playwright.dev/docs/debug",
     patterns: [/\.pause\s*\(\s*\)/g],
@@ -708,9 +708,9 @@ const RULES: Rule[] = [
     title: "Force-click usage detected in Cypress tests",
     severity: "medium",
     description:
-      "Cypress commands using { force: true } bypass actionability checks (visibility, disability, cover). This hides genuine UI issues such as overlapping elements, disabled buttons, or elements rendered off-screen.",
+      "Cypress commands using { force: true } bypass actionability checks (visibility, disability, cover). This hides genuine UI issues such as overlapping elements, disabled buttons, or elements rendered off screen.",
     recommendation:
-      "Investigate why the element isn't actionable. Fix the underlying DOM/CSS issue rather than forcing clicks. If the element is in a scrollable container, Cypress auto-scrolls — force should rarely be needed.\nhttps://docs.cypress.io/guides/core-concepts/interacting-with-elements#Forcing",
+      "Investigate why the element isn't actionable. Fix the underlying DOM/CSS issue rather than forcing clicks. If the element is in a scrollable container, Cypress auto-scrolls force should rarely be needed.\nhttps://docs.cypress.io/guides/core-concepts/interacting-with-elements#Forcing",
     patterns: [/force\s*:\s*true/g],
     fileGlobs: [
       "**/*.cy.ts", "**/*.cy.js", "**/*.cy.tsx", "**/*.cy.jsx",
@@ -996,6 +996,11 @@ function countMatches(
 
 function hasFinding(findings: Finding[], id: string) {
   return findings.some((f) => f.findingId === id && f.evidence.length > 0);
+}
+
+/** True when the expression depends on runtime env vars (can't determine value statically). */
+function isEnvDriven(expr: string): boolean {
+  return /process\.env\b/.test(expr) || /\bparseInt\s*\(/.test(expr);
 }
 
 function retriesLikelyEnabled(retriesExpr?: string) {
@@ -3287,7 +3292,9 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // INSIGHT-004: Excessive retries
-  if (retriesEnabled && retriesExpr) {
+  // Skip when retries are driven by env vars or parseInt() — the extracted
+  // numbers are arguments/radix, not the actual retry count.
+  if (retriesEnabled && retriesExpr && !isEnvDriven(retriesExpr)) {
     const retriesMatch = retriesExpr.match(/\b(\d+)\b/g);
     const maxRetries = retriesMatch ? Math.max(...retriesMatch.map(Number)) : 0;
     
@@ -3407,7 +3414,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   // INSIGHT-015: Retries not CI-conditional (per test-configuration doc)
-  if (pw && retriesEnabled && retriesExpr && !/process\.env/.test(retriesExpr)) {
+  if (pw && retriesEnabled && retriesExpr && !isEnvDriven(retriesExpr)) {
     findings.push({
       findingId: "PW-INSIGHT-015",
       severity: "medium",

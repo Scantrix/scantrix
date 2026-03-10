@@ -964,8 +964,8 @@ When no inventory is provided or test files ≤ 0, `densityFactor = 1.0` (identi
 | A | ≥ 80 | Excellent | Well-structured framework with strong practices |
 | B | ≥ 60 | Good | Solid foundation with room for improvement |
 | C | ≥ 40 | Fair | Multiple areas need attention |
-| D | ≥ 25 | Poor | Significant issues affecting reliability |
-| F | < 25 | Critical | Widespread issues requiring immediate action |
+| D | ≥ 30 | Poor | Significant issues affecting reliability |
+| F | < 30 | Critical | Widespread issues requiring immediate action |
 
 ### Worked examples
 

@@ -876,7 +876,7 @@ ${bodyHtml}
 
 async function loadFooterLogoDataUri(): Promise<string | undefined> {
   // Prefer a stable asset path; keep failure non-fatal.
-  const logoPath = path.join(process.cwd(), "assets", "scantrix-logo-wide.svg");
+  const logoPath = path.join(process.cwd(), "docs", "scantrix-logo-wide.svg");
   try {
     const bytes = await fs.readFile(logoPath);
     return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
@@ -886,10 +886,10 @@ async function loadFooterLogoDataUri(): Promise<string | undefined> {
 }
 
 async function loadSidebarLogoSvg(): Promise<string | undefined> {
-  // Try co-located src/assets first, then fall back to project root assets.
+  // Try co-located docs/ first, then fall back to project root docs/.
   const candidates = [
-    path.join(__dirname, "assets", "scantrix-sidebar.svg"),
-    path.join(process.cwd(), "src", "assets", "scantrix-logo.svg"),
+    path.join(__dirname, "..", "docs", "scantrix-sidebar.svg"),
+    path.join(process.cwd(), "docs", "scantrix-logo.svg"),
   ];
   for (const p of candidates) {
     try {
@@ -1807,7 +1807,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
   md.push(``);
   md.push(`<div class="report-footer-text"><b>Questions?</b> Contact QA Engineering team for remediation guidance.</div>`);
-   md.push(`<div class="report-footer-text"><b>https://www.scantrix.app</b></div>`);
+  md.push(`<div class="report-footer-text"><b>https://github.com/stamez/repo-audit-agent</b></div>`);
   md.push(``);
   md.push(`</div>`);
 

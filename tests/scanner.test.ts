@@ -503,3 +503,22 @@ describe("CI-012 — list-style Azure DevOps variables", () => {
     expect(hasFinding(results, "CI-012")).toBe(false);
   }, 30_000);
 });
+
+// ─── Env-driven retries: no false-positive PW-INSIGHT-004 ────────────
+describe("env-retries-repo", () => {
+  let results: ScanResults;
+
+  beforeAll(async () => {
+    results = await scanRepo(path.join(FIXTURES, "env-retries-repo"), {
+      checkOutdatedDependencies: false,
+    });
+  }, 30_000);
+
+  it("does NOT fire PW-INSIGHT-004 for parseInt(process.env.RETRIES!, 10)", () => {
+    expect(hasFinding(results, "PW-INSIGHT-004")).toBe(false);
+  });
+
+  it("does NOT fire PW-INSIGHT-015 for env-driven retries", () => {
+    expect(hasFinding(results, "PW-INSIGHT-015")).toBe(false);
+  });
+});

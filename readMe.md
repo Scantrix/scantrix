@@ -1,264 +1,180 @@
-# Scantrix
-### Eliminating Flaky Tests, Hidden CI Costs, and Automation Guesswork
+<p align="center">
+  <img src="docs/scantrix-logo.svg" alt="Scantrix" width="420" />
+</p>
+
+<h3 align="center">Static analysis for Playwright, Cypress, and Selenium test repositories</h3>
+
+<p align="center">
+  <a href="#quick-start">Quick Start</a> &middot;
+  <a href="#output-formats">Output</a> &middot;
+  <a href="#cli-reference">CLI Reference</a> &middot;
+  <a href="#github-action">GitHub Action</a> &middot;
+  <a href="docs/RULES.md">Rules</a> &middot;
+  <a href="#license">License</a>
+</p>
 
 ---
 
-## **Slide 1 — The Problem**
-### *Modern Test Automation Is Expensive, Fragile, and Misleading*
-
-Enterprise Playwright repositories today often contain:
-
-- Thousands of automated tests
-- Multiple CI pipelines
-- Environment-driven behavior
-- Years of accumulated test debt
-
-Yet teams still struggle with:
-
-- Flaky tests that "pass on retry"
-- CI pipelines that behave differently with no clear explanation
-- Long runtimes caused by hidden waits and misconfiguration
-- Manual audits that take days and still miss systemic issues
-
-**The result:** wasted engineering time, unreliable quality signals, and delayed releases.
-
----
-
-## **Slide 2 — Why Existing Tools Aren't Enough**
-### *Linters See Syntax. They Don't See Systems.*
-
-Traditional tools (ESLint, Playwright linters):
-
-- Flag individual code smells
-- Operate file-by-file
-- Lack awareness of CI, retries, workers, or environment intent
-
-They cannot answer the questions leadership actually asks:
-
-- Why are retries masking failures?
-- Why does one pipeline finish in 12 minutes and another in 45?
-- Where should we fix things first for maximum impact?
-
----
-
-## **Slide 3 — Our Solution**
-# **Scantrix**
-
-A static analysis, configuration-aware auditing engine that evaluates:
-
-- Playwright test code
-- Playwright configuration
-- CI pipelines (Azure DevOps, GitHub Actions)
-
-…and correlates them into **high-signal, executive-grade insights**.
-
-It runs in minutes, requires **no test execution**, and is completely **read‑only**.
-
----
-
-## **Slide 4 — What Makes It Different**
-### *Correlation, Not Linting*
-
-Scantrix doesn't just flag issues — **it explains behavior**.
-
-It correlates:
-
-- Code patterns (hard waits, force clicks)
-- Configuration choices (retries, workers, trace policy)
-- CI pipeline behavior (env vars, caching, artifacts)
-
-This enables detection of **systemic reliability risks**, not isolated warnings.
-
----
-
-## **Slide 5 — Example Insight**
-### *Masked Flakiness Risk*
-
-Detected when:
-
-- Retries are enabled
-- Hard waits exist in the codebase
-- Force clicks are present
-
-**Insight produced:**
-> "Retries are compensating for timing instability rather than fixing root causes."
-
-Why this matters:
-
-- CI time increases
-- Failures become harder to reproduce
-- Engineers burn time chasing non-deterministic failures
-
-**This is the level of insight linters cannot produce.**
-
----
-
-## **Slide 6 — CI Visibility You Don't Have Today**
-### *CI Pipeline Consistency Analysis*
-
-Scantrix scans all pipeline YAML files and detects:
-
-- Which pipelines publish reports, traces, and test results
-- Which pipelines set critical env vars (WORKERS, HEADLESS)
-- Which pipelines use caching
-- Hosted vs self-hosted agent behavior
-
-**Example finding:**
-> WORKERS env is set in 3 of 8 pipelines — missing in 5.
-
-**Impact:**
-- Inconsistent parallelism
-- Unpredictable runtimes
-- "Same tests, different behavior"
-
----
-
-## **Slide 7 — Actionable, Not Overwhelming**
-### *Prioritized Findings with Clear Hotspots*
-
-Every finding includes:
-
-- Context-aware severity (not static rules)
-- Plain-language explanation
-- Concrete recommendations
-- Ranked hotspot files and pipelines
-
-This answers the critical question:
-
-> **"What should we fix first to get the biggest reliability gain?"**
-
----
-
-## **Slide 8 — Outputs Leadership Can Read**
-### *Not Logs — Reports*
-
-Scantrix produces:
-
-- Executive-friendly **Markdown reports**
-- Structured **JSON** for automation
-- **SARIF** for GitHub Code Scanning and Azure DevOps
-- **HTML** and **email** formatted reports
-
-Reports are designed to be:
-
-- Shared in leadership reviews
-- Used in architecture discussions
-- Acted on immediately by engineering teams
-
----
-
-## **Slide 9 — Business Value**
-### *Why This Matters to the Organization*
-
-Scantrix helps teams:
-
-- Reduce flaky tests and false failures
-- Cut CI runtime and infrastructure cost
-- Improve release confidence
-- Eliminate "automation folklore" and guesswork
-- Scale quality without manual audits
-
----
-
-## **Slide 10 — Ideal Use Cases**
-
-- Large Playwright repositories (500+ tests)
-- Multiple CI pipelines
-- Teams experiencing unexplained flakiness
-- Organizations preparing for scale or re-architecture
-- Pre-merge or pre-release quality audits
-
----
-
-## **Slide 11 — Strategic Vision**
-### *From Tool to Platform*
-
-Scantrix is designed to evolve into:
-
-- A paid repo-audit service
-- A CI quality gate
-- A reliability scoring engine
-- A consulting accelerator for test architecture reviews
-
-It is intentionally:
-
-- Fast
-- Safe (read-only)
-- CI-agnostic
-- Extensible
-
----
-
-## **Slide 12 — Phase 2: Platform Features (Shipped)**
-### *Trend Tracking · CI Integration*
-
-### Trend Tracking & Diff Mode
-- **Auto-snapshots**: Every scan saves a timestamped snapshot to `<outDir>/snapshots/` with git branch, commit SHA, and file/test counts
-- **Auto-baseline**: Automatically compares against the latest previous snapshot — no manual `--diff` flag needed
-- **Evidence-level diffs**: Tracks which file:line locations were added/removed within persistent findings (with Windows path normalization)
-- **Inventory-level diffs**: Shows total files and test file count changes between scans
-- **Git-aware reports**: Audit summary header and appendix show the scanned branch and commit
-- **Console summary**: One-line delta printed after every scan, including file count changes
-
-### GitHub Action for CI
-- **Composite action** (`action.yml`) — drop into any repo's workflow
-- Auto-posts/updates PR comments with grade, finding counts, and top issues
-- Optional quality gate: `fail-on-high: true` blocks merges with high-severity findings
-
-### CLI Subcommands
-```
-scantrix <repoPath> [--out <dir>] [--format md,html,json,sarif,email] [--no-trend]
-                    [--json-path <path>]
-scantrix init [dir]                          # Create starter .auditrc.json
-```
-
-### Canonical JSON Output
-Every scan can produce a canonical `ScanResult` JSON artifact via `--json-path`:
-
-```bash
-scantrix /path/to/repo --out ./audit-out --json-path ./audit-out/scantrix-results.json
-```
-
-See `docs/CLI_ARCHITECTURE.md` for detailed architecture diagrams and setup instructions.
-
----
-
-## **Slide 13 — Bottom Line**
-# **We Don't Run Your Tests.
-We Explain Them.**
-
-Scantrix turns complex automation systems into:
-
-- Clear insights
-- Prioritized actions
-- Better engineering decisions
-
----
+Scantrix audits test automation repositories and CI pipelines. It scans Playwright, Cypress, and Selenium codebases against 87 rules, correlates code patterns with CI configuration, and produces prioritized, executive grade findings, all without executing a single test.
+
+## What it does
+
+- Detects flaky patterns (hard waits, force clicks, non-retrying assertions, missing awaits)
+- Analyzes Playwright, Cypress, and Selenium configuration for misconfigurations
+- Scans CI pipelines (GitHub Actions, Azure DevOps) for inconsistencies
+- Produces correlated insights (e.g., retries masking flakiness, CI worker mismatches)
+- Scores repository health (A–F grade) with density-normalized risk calculation
+- Tracks trends across scans with automatic snapshots and diff summaries
+
+## What it does NOT do
+
+- Does not execute tests
+- Does not modify any files in the target repository
+- Does not make network connections beyond the local filesystem
+- Does not require credentials or access tokens to scan
 
 ## Quick Start
 
-### Scan a repository
-```command
-npm run audit -- "C:\Repositories\Service.Playwright.Automation" --out "audit-out\service-pw-automation"
+```bash
+# Install dependencies
+npm install
+
+# Build
+npm run build
+
+# Scan a repository
+node dist/cli.js /path/to/repo --out ./audit-out
+
+# Or use the shorthand (builds + scans)
+npm run audit -- /path/to/repo --out ./audit-out
 ```
 
-### Scan and write canonical results JSON (recommended)
+## Output Formats
+
+| Format | File | Description |
+|--------|------|-------------|
+| Markdown | `audit_summary.md` | Primary report — executive-grade findings with hotspots |
+| HTML | `audit_summary.html` | Styled HTML report for browser viewing |
+| JSON | `findings.json` | Machine-readable findings array |
+| SARIF | `audit.sarif` | GitHub Code Scanning / Azure DevOps compatible |
+| Email | `audit_email.html` | Email-ready HTML summary |
+
+Use `--format` to select specific formats:
+
 ```bash
-node dist/cli.js "C:\path\to\repo" --out ./audit-out --json-path ./audit-out/scantrix-results.json
+node dist/cli.js /path/to/repo --out ./audit-out --format md,json,sarif
 ```
 
-### Initialize config for a target repo
-```bash
-npx ts-node .\src\cli.ts init "C:\Repositories\Service.Playwright.Automation"
+## CLI Reference
+
+```
+scantrix <repoPath> [options]
+scantrix init [dir]
 ```
 
-### Run tests
+### Scan options
+
+| Flag | Description | Default |
+|------|-------------|---------|
+| `--out <dir>` | Output directory for reports | `./audit-out` |
+| `--format <list>` | Comma-separated formats: `md,html,json,sarif,email` | all |
+| `--config <path>` | Path to `.auditrc.json` config file | auto-detected |
+| `--updates` | Check npm registry for outdated dependencies | off |
+| `--diff <path>` | Explicit baseline `findings.json` for comparison | auto |
+| `--no-trend` | Disable automatic snapshot saving | off |
+| `--json-path <path>` | Write canonical `ScanResult` JSON to this path | — |
+
+### Environment variables
+
+| Variable | Description |
+|----------|-------------|
+| `SCANTRIX_JSON_PATH` | Write canonical results JSON to this path |
+
+### Init subcommand
+
 ```bash
+# Create a starter .auditrc.json in the target repo
+node dist/cli.js init /path/to/repo
+```
+
+## Configuration
+
+Create an `.auditrc.json` in the target repository to customize behavior:
+
+```bash
+node dist/cli.js init /path/to/repo
+```
+
+The config file supports rule overrides (disable rules, adjust severity) and scan options. See [CLI Architecture](docs/CLI_ARCHITECTURE.md) for details.
+
+## GitHub Action
+
+Use Scantrix in CI with the provided composite action:
+
+```yaml
+- uses: your-org/repo-audit-agent@v1
+  with:
+    repo-path: "."
+    output-dir: "./scantrix-out"
+    format: "md,html,json,sarif"
+    post-comment: "true"    # Post summary on PRs
+    fail-on-high: "true"    # Block merges with high-severity findings
+```
+
+### Action inputs
+
+| Input | Description | Default |
+|-------|-------------|---------|
+| `repo-path` | Path to repository to scan | `.` |
+| `output-dir` | Directory for audit artifacts | `./scantrix-out` |
+| `config-path` | Path to `.auditrc.json` | — |
+| `format` | Output formats (comma-separated) | `md,html,json,sarif` |
+| `check-updates` | Check for outdated dependencies | `false` |
+| `post-comment` | Post summary comment on PRs | `true` |
+| `fail-on-high` | Fail if high-severity findings exist | `false` |
+
+### Action outputs
+
+| Output | Description |
+|--------|-------------|
+| `findings-count` | Total number of findings |
+| `high-count` | Number of high-severity findings |
+| `medium-count` | Number of medium-severity findings |
+| `low-count` | Number of low-severity findings |
+| `risk-grade` | Overall risk grade (A–F) |
+| `report-path` | Path to generated report directory |
+
+## Trend Tracking
+
+Every scan automatically saves a snapshot to `<outDir>/snapshots/` with git branch, commit SHA, and file counts. On subsequent scans, Scantrix compares against the latest baseline and reports:
+
+- New and resolved findings
+- Evidence-level diffs (added/removed file:line locations)
+- Inventory changes (total files, test file counts)
+- One-line console delta summary
+
+Disable with `--no-trend`.
+
+## Documentation
+
+- [Rules Reference](docs/RULES.md) — all 87 finding rules with severity and description
+- [CI Integration](docs/CI_INTEGRATION.md) — CI pipeline setup and quality gates
+- [CLI Architecture](docs/CLI_ARCHITECTURE.md) — module diagram and data flow
+- [Security](docs/SECURITY.md) — security model and threat considerations
+- [Finding Reference](FINDING_REFERENCE.md) — complete finding ID catalog
+
+## Contributing
+
+Contributions are welcome. Please open an issue to discuss proposed changes before submitting a pull request.
+
+```bash
+# Run the test suite
 npm test
+
+# Run tests in watch mode
+npm run test:watch
 ```
 
-### Trend tracking
+## License
 
-| System | Storage | Populated by | View with |
-|--------|---------|-------------|-----------|
-| CLI snapshots | `audit-out/snapshots/*.json` | Auto-saved every scan | Console diff summary |
+[AGPL-3.0](LICENSE) — Copyright (c) 2025 Shawn Tamez / Scantrix
