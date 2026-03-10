@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Scantrix (repo-audit-agent v6.3.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in minutes.
+Scantrix (v6.3.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in minutes.
 
 **CLI Engine** (`src/`) — TypeScript CommonJS compiled to `dist/`. Entry: `src/cli.ts` (subcommands: `scan` default, `init`).
 

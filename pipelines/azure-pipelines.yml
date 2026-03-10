@@ -1,0 +1,159 @@
+# ============================================================================
+# Scantrix — Daily Multi-Repo Audit Pipeline
+# ============================================================================
+# Runs on a daily schedule, scanning multiple repos across ADO projects.
+# Each target repo gets an independent parallel job via the scan-repo template.
+#
+# To add a new repo:
+#   1. Add a resources.repositories entry (alias + <Project>/<Repo>)
+#   2. Add a template invocation under the Scan stage
+#
+# Prerequisites:
+#   The build service identity for this pipeline's project needs Read access
+#   to each target repo's project:
+#     Target project > Project Settings > Repos > Security
+#     > grant Read to "<HostProject> Build Service (<Org>)"
+# ============================================================================
+
+trigger: none          # No CI trigger — schedule only
+
+schedules:
+  - cron: "0 6 * * *"  # Daily at 06:00 UTC
+    displayName: "Daily Scantrix Scan"
+    branches:
+      include:
+        - main
+    always: true        # Run even if no source changes
+
+# ---------------------------------------------------------------------------
+# Pool — use a Microsoft-hosted Ubuntu agent
+# Override at job level if you need a self-hosted agent
+# ---------------------------------------------------------------------------
+pool:
+  vmImage: "ubuntu-latest"
+
+# ---------------------------------------------------------------------------
+# Target repositories — one entry per repo to scan
+# ---------------------------------------------------------------------------
+# Alias rules:
+#   - Must be unique across the pipeline
+#   - Used as the checkout directory name and artifact suffix
+#   - Keep short, lowercase, hyphenated
+#
+# NOTE: Replace <YourOrg>, project names, and repo names with real values.
+# ---------------------------------------------------------------------------
+resources:
+  repositories:
+    # ── Example repos (replace with your actual repos) ──────────────────
+    - repository: repo-alpha
+      type: git
+      name: ProjectA/repo-alpha
+      ref: refs/heads/main
+
+    - repository: repo-beta
+      type: git
+      name: ProjectA/repo-beta
+      ref: refs/heads/main
+
+    - repository: repo-gamma
+      type: git
+      name: ProjectB/repo-gamma
+      ref: refs/heads/main
+
+    - repository: repo-delta
+      type: git
+      name: ProjectB/repo-delta
+      ref: refs/heads/main
+
+    - repository: repo-epsilon
+      type: git
+      name: ProjectC/repo-epsilon
+      ref: refs/heads/main
+
+    - repository: repo-zeta
+      type: git
+      name: ProjectC/repo-zeta
+      ref: refs/heads/main
+
+# =========================================================================
+# Stage 1 — Build Scantrix
+# =========================================================================
+stages:
+  - stage: Build
+    displayName: "Build Scantrix"
+    jobs:
+      - job: BuildScantrix
+        displayName: "npm ci + build + pack"
+        steps:
+          - checkout: self
+            displayName: "Checkout Scantrix"
+
+          - task: NodeTool@0
+            displayName: "Use Node.js 20.x"
+            inputs:
+              versionSpec: "20.x"
+
+          - script: npm ci
+            displayName: "Install dependencies"
+            workingDirectory: $(Build.SourcesDirectory)
+
+          - script: npm run build
+            displayName: "Compile TypeScript"
+            workingDirectory: $(Build.SourcesDirectory)
+
+          - script: npm pack
+            displayName: "Create tarball"
+            workingDirectory: $(Build.SourcesDirectory)
+
+          - publish: $(Build.SourcesDirectory)/scantrix-6.3.0.tgz
+            artifact: scantrix-tarball
+            displayName: "Publish Scantrix tarball"
+
+  # =======================================================================
+  # Stage 2 — Scan target repos (parallel jobs via template)
+  # =======================================================================
+  - stage: Scan
+    displayName: "Scan Repos"
+    dependsOn: Build
+    jobs:
+      # ── repo-alpha ──────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-alpha
+          repoName: repo-alpha
+          project: ProjectA
+
+      # ── repo-beta ───────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-beta
+          repoName: repo-beta
+          project: ProjectA
+
+      # ── repo-gamma ──────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-gamma
+          repoName: repo-gamma
+          project: ProjectB
+
+      # ── repo-delta ──────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-delta
+          repoName: repo-delta
+          project: ProjectB
+
+      # ── repo-epsilon ────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-epsilon
+          repoName: repo-epsilon
+          project: ProjectC
+
+      # ── repo-zeta ──────────────────────────────────────────────────
+      - template: templates/scan-repo.yml
+        parameters:
+          repoAlias: repo-zeta
+          repoName: repo-zeta
+          project: ProjectC

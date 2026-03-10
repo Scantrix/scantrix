@@ -84,9 +84,9 @@ export function toSarif(results: ScanResults): object {
       {
         tool: {
           driver: {
-            name: "repo-audit-agent",
-            version: "2.5.0",
-            informationUri: "https://github.com/user/repo-audit-agent",
+            name: "scantrix",
+            version: "6.3.0",
+            informationUri: "https://github.com/stamez/scantrix",
             rules,
           },
         },

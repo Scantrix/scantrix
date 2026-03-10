@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import minimist from "minimist";
 import path from "path";
 import { readFileSync } from "fs";

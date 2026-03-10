@@ -1257,7 +1257,7 @@ custom configuration, and a full test suite. The engine now covers 40+ audit rul
 - Top findings section with hotspots
 
 #### CLI
-- `repo-audit-agent scan <path>` command
+- `scantrix scan <path>` command
 - Output directory configuration
 - Error handling and validation
 

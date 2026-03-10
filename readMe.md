@@ -112,7 +112,7 @@ The config file supports rule overrides (disable rules, adjust severity) and sca
 Use Scantrix in CI with the provided composite action:
 
 ```yaml
-- uses: your-org/repo-audit-agent@v1
+- uses: your-org/scantrix@v1
   with:
     repo-path: "."
     output-dir: "./scantrix-out"

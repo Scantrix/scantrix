@@ -1,0 +1,75 @@
+# ============================================================================
+# scan-repo.yml — Reusable job template for scanning a single repository
+# ============================================================================
+# Called once per target repo from the parent pipeline's Scan stage.
+# Each invocation becomes an independent job that runs in parallel.
+#
+# Parameters:
+#   repoAlias  — The resources.repositories alias (used for checkout)
+#   repoName   — Human-readable repo name (used in artifact names and logs)
+#   project    — ADO project containing the target repo (for display only)
+# ============================================================================
+
+parameters:
+  - name: repoAlias
+    type: string
+    displayName: "Repository alias (from resources.repositories)"
+
+  - name: repoName
+    type: string
+    displayName: "Repository name (for artifact naming)"
+
+  - name: project
+    type: string
+    displayName: "ADO project name (for display)"
+
+jobs:
+  - job: Scan_${{ replace(parameters.repoName, '-', '_') }}
+    displayName: "Scan ${{ parameters.project }}/${{ parameters.repoName }}"
+    pool:
+      vmImage: "ubuntu-latest"
+    steps:
+      # ── 1. Checkout the target repo ───────────────────────────────────
+      - checkout: ${{ parameters.repoAlias }}
+        displayName: "Checkout ${{ parameters.repoName }}"
+        path: "target-repo"
+
+      # ── 2. Set up Node.js ─────────────────────────────────────────────
+      - task: NodeTool@0
+        displayName: "Use Node.js 20.x"
+        inputs:
+          versionSpec: "20.x"
+
+      # ── 3. Download Scantrix tarball from Build stage ─────────────────
+      - download: current
+        artifact: scantrix-tarball
+        displayName: "Download Scantrix tarball"
+
+      # ── 4. Install Scantrix from tarball ──────────────────────────────
+      - script: |
+          mkdir -p $(Agent.TempDirectory)/scantrix
+          cd $(Agent.TempDirectory)/scantrix
+          npm init -y > /dev/null 2>&1
+          npm install $(Pipeline.Workspace)/scantrix-tarball/scantrix-6.3.0.tgz
+        displayName: "Install Scantrix"
+
+      # ── 5. Run Scantrix scan ──────────────────────────────────────────
+      - script: |
+          REPO_PATH="$(Agent.BuildDirectory)/target-repo"
+          OUT_DIR="$(Build.ArtifactStagingDirectory)/scantrix-${{ parameters.repoName }}"
+
+          mkdir -p "$OUT_DIR"
+
+          node $(Agent.TempDirectory)/scantrix/node_modules/scantrix/dist/cli.js \
+            "$REPO_PATH" \
+            --out "$OUT_DIR" \
+            --format md,html,json,sarif \
+            --json-path "$OUT_DIR/scantrix-results.json" \
+            --no-trend
+        displayName: "Scan ${{ parameters.repoName }}"
+
+      # ── 6. Publish scan results as pipeline artifact ──────────────────
+      - publish: $(Build.ArtifactStagingDirectory)/scantrix-${{ parameters.repoName }}
+        artifact: scantrix-${{ parameters.repoName }}
+        displayName: "Publish scantrix-${{ parameters.repoName }}"
+        condition: always()  # Publish even if scan found issues (non-zero exit)

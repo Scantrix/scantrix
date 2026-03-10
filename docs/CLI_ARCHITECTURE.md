@@ -177,8 +177,8 @@ written via `--json-path`. Its shape is stable and versioned.
 
 ```bash
 # Clone and build
-git clone https://your-org/repo-audit-agent.git
-cd repo-audit-agent
+git clone https://your-org/scantrix.git
+cd scantrix
 npm ci
 npm run build
 ```

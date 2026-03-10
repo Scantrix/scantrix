@@ -153,6 +153,7 @@ type HtmlFlavor = "full" | "email";
 
 interface WrapHtmlOptions {
   sidebarLogoSvg?: string;
+  faviconSvgDataUri?: string;
 }
 
 function wrapHtmlDocument(title: string, bodyHtml: string, flavor: HtmlFlavor = "full", opts: WrapHtmlOptions = {}): string {
@@ -170,8 +171,8 @@ function wrapHtmlDocument(title: string, bodyHtml: string, flavor: HtmlFlavor = 
   --color-text-secondary: #1e293b;
   --color-muted: #94a3b8;
   --color-border: #e2e8f0;
-  --color-border-light: #3b82f6;
-  --color-accent: #3b82f6;
+  --color-border-light: #4F7BE3;
+  --color-accent: #4F7BE3;
   --color-accent-light: #eef2ff;
   --color-accent-hover: #386dca;
 
@@ -237,7 +238,7 @@ body {
 }
 .sidebar-nav a:hover { color: #e2e8f0; background: #283548; }
 .sidebar-nav a.active {
-  color: #3b82f6; border-left-color: #3b82f6;
+  color: #4F7BE3; border-left-color: #4F7BE3;
   background: rgba(59, 130, 246, 0.1); font-weight: 600;
 }
 .sidebar-actions {
@@ -541,7 +542,7 @@ details:not(.finding-card) > p + ul { padding-left: calc(var(--space-6) + var(--
   display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-5);
   padding: var(--space-3) 0; margin: var(--space-2) 0 var(--space-4);
   font-size: 13px; color: var(--color-text-secondary);
-  border-bottom: 3px solid #3b82f6;
+  border-bottom: 3px solid #4F7BE3;
 }
 .report-meta .meta-item { white-space: nowrap; }
 .report-meta code { font-size: 12px; }
@@ -596,8 +597,8 @@ details:not(.finding-card) > p + ul { padding-left: calc(var(--space-6) + var(--
   --color-text-secondary: #94a3b8;
   --color-muted: #64748b;
   --color-border: #334155;
-  --color-border-light: #3b82f6;
-  --color-accent: #3b82f6;
+  --color-border-light: #4F7BE3;
+  --color-accent: #4F7BE3;
   --color-accent-light: rgba(99, 102, 241, 0.1);
   --color-accent-hover: #6366f1;
   --severity-high-bg: rgba(220, 38, 38, 0.15);
@@ -797,7 +798,7 @@ details:not(.finding-card) > p + ul { padding-left: calc(var(--space-6) + var(--
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>${title}</title>
+<title>${title}</title>${opts.faviconSvgDataUri ? `\n<link rel="icon" type="image/svg+xml" href="${opts.faviconSvgDataUri}"/>` : ''}
 <style>${css}</style>
 <script>(function(){var t=localStorage.getItem('scantrix-theme');if(t){document.documentElement.dataset.theme=t;}else if(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches){document.documentElement.dataset.theme='dark';}})();</script>
 </head>
@@ -833,7 +834,7 @@ function wrapEmailDocument(title: string, bodyHtml: string): string {
   const emailCss = `
 :root {
   --text: #1a1f36; --muted: #6b7280; --border: #e2e4e8;
-  --header: #111827; --accent: #3b82f6;
+  --header: #111827; --accent: #4F7BE3;
 }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
@@ -897,6 +898,20 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
       // Strip XML declaration — not valid when inlined in HTML
       svg = svg.replace(/<\?xml[^?]*\?>\s*/g, "").trim();
       return svg;
+    } catch { /* try next */ }
+  }
+  return undefined;
+}
+
+async function loadFaviconDataUri(): Promise<string | undefined> {
+  const candidates = [
+    path.join(__dirname, "..", "docs", "scantrix-icon.svg"),
+    path.join(process.cwd(), "docs", "scantrix-icon.svg"),
+  ];
+  for (const p of candidates) {
+    try {
+      const bytes = await fs.readFile(p);
+      return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
     } catch { /* try next */ }
   }
   return undefined;
@@ -1443,6 +1458,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
 
   const footerLogoDataUri = await loadFooterLogoDataUri();
   const sidebarLogoSvg = await loadSidebarLogoSvg();
+  const faviconSvgDataUri = await loadFaviconDataUri();
 
   const findingsSorted = [...results.findings].sort(
     (a, b) => severityScore(b.severity) - severityScore(a.severity)
@@ -1807,7 +1823,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
   md.push(``);
   md.push(`<div class="report-footer-text"><b>Questions?</b> Contact QA Engineering team for remediation guidance.</div>`);
-  md.push(`<div class="report-footer-text"><b>https://github.com/stamez/repo-audit-agent</b></div>`);
+  md.push(`<div class="report-footer-text"><b>https://github.com/stamez/scantrix</b></div>`);
   md.push(``);
   md.push(`</div>`);
 
@@ -1821,7 +1837,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
 
   const htmlBody = mdParser.render(markdownReport);
   const fullHtml = linkifyHttpUrlsInRenderedHtml(
-    wrapHtmlDocument("Automation Framework Audit Report", htmlBody, "full", { sidebarLogoSvg })
+    wrapHtmlDocument("Automation Framework Audit Report", htmlBody, "full", { sidebarLogoSvg, faviconSvgDataUri })
   );
 
   const emailMarkdown = toEmailFriendlyMarkdown(markdownReport);

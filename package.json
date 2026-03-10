@@ -1,15 +1,19 @@
 {
-  "name": "repo-audit-agent",
+  "name": "scantrix",
   "version": "6.3.0",
   "description": "Static analysis and configuration-aware auditing engine for automation repositories",
   "main": "dist/cli.js",
+  "bin": {
+    "scantrix": "dist/cli.js"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli.js",
     "audit": "npm run build && node dist/cli.js",
     "scan": "npm run audit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "generate:favicons": "ts-node scripts/generate-favicons.ts"
   },
   "keywords": [],
   "author": "",
@@ -24,6 +28,8 @@
     "@types/markdown-it": "^14.1.2",
     "@types/minimist": "^1.2.5",
     "@types/node": "^25.1.0",
+    "@types/sharp": "^0.31.1",
+    "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
     "vitest": "^3.0.0"

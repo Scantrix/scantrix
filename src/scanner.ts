@@ -112,7 +112,7 @@ async function fetchJson(url: string, timeoutMs = 4500): Promise<any> {
       {
         headers: {
           "accept": "application/json",
-          "user-agent": "repo-audit-agent",
+          "user-agent": "scantrix",
         },
       },
       (res) => {
