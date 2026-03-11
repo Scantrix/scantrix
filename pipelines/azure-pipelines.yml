@@ -1,18 +1,23 @@
 # ============================================================================
 # Scantrix — Daily Multi-Repo Audit Pipeline
 # ============================================================================
-# Runs on a daily schedule, scanning multiple repos across ADO projects.
+# Runs on a daily schedule, scanning multiple ADO repos.
+# Scantrix source is checked out from GitHub via a service connection.
 # Each target repo gets an independent parallel job via the scan-repo template.
+#
+# Setup:
+#   1. Create a GitHub service connection in ADO:
+#      Project Settings > Service connections > New > GitHub
+#      Name it "GitHub-Scantrix" (or update the endpoint below)
+#      Grant it read access to Scantrix/scantrix
+#
+#   2. Grant the build service read access to each target repo's project:
+#      Target project > Project Settings > Repos > Security
+#      > grant Read to "<HostProject> Build Service (<Org>)"
 #
 # To add a new repo:
 #   1. Add a resources.repositories entry (alias + <Project>/<Repo>)
 #   2. Add a template invocation under the Scan stage
-#
-# Prerequisites:
-#   The build service identity for this pipeline's project needs Read access
-#   to each target repo's project:
-#     Target project > Project Settings > Repos > Security
-#     > grant Read to "<HostProject> Build Service (<Org>)"
 # ============================================================================
 
 trigger: none          # No CI trigger — schedule only
@@ -33,50 +38,35 @@ pool:
   vmImage: "ubuntu-latest"
 
 # ---------------------------------------------------------------------------
-# Target repositories — one entry per repo to scan
+# Repositories
 # ---------------------------------------------------------------------------
+# scantrix: GitHub repo (private) — requires a GitHub service connection
+# Target repos: ADO repos to scan — one entry per repo
+#
 # Alias rules:
 #   - Must be unique across the pipeline
 #   - Used as the checkout directory name and artifact suffix
 #   - Keep short, lowercase, hyphenated
 #
-# NOTE: Replace <YourOrg>, project names, and repo names with real values.
+# NOTE: Replace project names and repo names with your actual values.
 # ---------------------------------------------------------------------------
 resources:
   repositories:
-    # ── Example repos (replace with your actual repos) ──────────────────
-    - repository: repo-alpha
-      type: git
-      name: ProjectA/repo-alpha
+    # ── Scantrix source (GitHub) ──────────────────────────────────────
+    - repository: scantrix
+      type: github
+      endpoint: GitHub-Scantrix        # ADO service connection name
+      name: Scantrix/scantrix
       ref: refs/heads/main
 
-    - repository: repo-beta
+    # ── Target ADO repos ─────────────────────────────────────────────
+    - repository: service-playwright
       type: git
-      name: ProjectA/repo-beta
-      ref: refs/heads/main
-
-    - repository: repo-gamma
-      type: git
-      name: ProjectB/repo-gamma
-      ref: refs/heads/main
-
-    - repository: repo-delta
-      type: git
-      name: ProjectB/repo-delta
-      ref: refs/heads/main
-
-    - repository: repo-epsilon
-      type: git
-      name: ProjectC/repo-epsilon
-      ref: refs/heads/main
-
-    - repository: repo-zeta
-      type: git
-      name: ProjectC/repo-zeta
+      name: IT-Service Value Stream/Service.Playwright.Automation
       ref: refs/heads/main
 
 # =========================================================================
-# Stage 1 — Build Scantrix
+# Stage 1 — Build Scantrix (from GitHub)
 # =========================================================================
 stages:
   - stage: Build
@@ -85,8 +75,8 @@ stages:
       - job: BuildScantrix
         displayName: "npm ci + build + pack"
         steps:
-          - checkout: self
-            displayName: "Checkout Scantrix"
+          - checkout: scantrix
+            displayName: "Checkout Scantrix from GitHub"
 
           - task: NodeTool@0
             displayName: "Use Node.js 20.x"
@@ -95,17 +85,17 @@ stages:
 
           - script: npm ci
             displayName: "Install dependencies"
-            workingDirectory: $(Build.SourcesDirectory)
+            workingDirectory: $(Build.SourcesDirectory)/scantrix
 
           - script: npm run build
             displayName: "Compile TypeScript"
-            workingDirectory: $(Build.SourcesDirectory)
+            workingDirectory: $(Build.SourcesDirectory)/scantrix
 
           - script: npm pack
             displayName: "Create tarball"
-            workingDirectory: $(Build.SourcesDirectory)
+            workingDirectory: $(Build.SourcesDirectory)/scantrix
 
-          - publish: $(Build.SourcesDirectory)/scantrix-6.3.0.tgz
+          - publish: $(Build.SourcesDirectory)/scantrix/scantrix-6.3.0.tgz
             artifact: scantrix-tarball
             displayName: "Publish Scantrix tarball"
 
@@ -116,44 +106,9 @@ stages:
     displayName: "Scan Repos"
     dependsOn: Build
     jobs:
-      # ── repo-alpha ──────────────────────────────────────────────────
+      # ── Service.Playwright.Automation ────────────────────────────────
       - template: templates/scan-repo.yml
         parameters:
-          repoAlias: repo-alpha
-          repoName: repo-alpha
-          project: ProjectA
-
-      # ── repo-beta ───────────────────────────────────────────────────
-      - template: templates/scan-repo.yml
-        parameters:
-          repoAlias: repo-beta
-          repoName: repo-beta
-          project: ProjectA
-
-      # ── repo-gamma ──────────────────────────────────────────────────
-      - template: templates/scan-repo.yml
-        parameters:
-          repoAlias: repo-gamma
-          repoName: repo-gamma
-          project: ProjectB
-
-      # ── repo-delta ──────────────────────────────────────────────────
-      - template: templates/scan-repo.yml
-        parameters:
-          repoAlias: repo-delta
-          repoName: repo-delta
-          project: ProjectB
-
-      # ── repo-epsilon ────────────────────────────────────────────────
-      - template: templates/scan-repo.yml
-        parameters:
-          repoAlias: repo-epsilon
-          repoName: repo-epsilon
-          project: ProjectC
-
-      # ── repo-zeta ──────────────────────────────────────────────────
-      - template: templates/scan-repo.yml
-        parameters:
-          repoAlias: repo-zeta
-          repoName: repo-zeta
-          project: ProjectC
+          repoAlias: service-playwright
+          repoName: Service.Playwright.Automation
+          project: IT-Service Value Stream
