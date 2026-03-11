@@ -57,13 +57,13 @@ resources:
       type: github
       endpoint: GitHub-Scantrix        # ADO service connection name
       name: Scantrix/scantrix
-      ref: refs/heads/main
+      ref: refs/heads/develop
 
     # ── Target ADO repos ─────────────────────────────────────────────
     - repository: service-playwright
       type: git
       name: IT-Service Value Stream/Service.Playwright.Automation
-      ref: refs/heads/main
+      ref: refs/heads/develop
 
 # =========================================================================
 # Stage 1 — Build Scantrix (from GitHub)
