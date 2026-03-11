@@ -27,7 +27,7 @@ schedules:
     displayName: "Daily Scantrix Scan"
     branches:
       include:
-        - main
+        - develop
     always: true        # Run even if no source changes
 
 # ---------------------------------------------------------------------------
