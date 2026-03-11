@@ -20,6 +20,7 @@
   "license": "MIT",
   "files": [
     "dist/",
+    "docs/*.svg",
     "LICENSE",
     "README.md"
   ],

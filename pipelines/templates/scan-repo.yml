@@ -23,6 +23,11 @@ parameters:
     type: string
     displayName: "ADO project name (for display)"
 
+  - name: branch
+    type: string
+    displayName: "Branch being scanned (for report metadata)"
+    default: "main"
+
 jobs:
   - job: Scan_${{ replace(replace(parameters.repoName, '-', '_'), '.', '_') }}
     displayName: "Scan ${{ parameters.project }}/${{ parameters.repoName }}"
@@ -65,6 +70,8 @@ jobs:
             --out "$OUT_DIR" \
             --format md,html,json,sarif \
             --json-path "$OUT_DIR/scantrix-results.json" \
+            --repo-name "${{ parameters.repoName }}" \
+            --branch "${{ parameters.branch }}" \
             --no-trend
         displayName: "Scan ${{ parameters.repoName }}"
 

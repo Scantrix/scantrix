@@ -40,6 +40,8 @@ async function main() {
   const formatArg = args.format as string | undefined;    // --format md,html,json,sarif,email
   const noTrend = Boolean(args["no-trend"]);              // --no-trend to disable auto-snapshot
   const jsonPath = args["json-path"] as string | undefined; // --json-path path/to/results.json
+  const repoName = args["repo-name"] as string | undefined;  // --repo-name display name override
+  const branchOverride = args["branch"] as string | undefined; // --branch override detected branch
 
   if (!repoPath) {
     console.error(
@@ -47,6 +49,7 @@ async function main() {
       "  scantrix <repoPath> [--out <dir>] [--updates] [--config <path>]\n" +
       "           [--diff <baseline.json>] [--format md,html,json,sarif,email]\n" +
       "           [--no-trend] [--json-path <path>]\n" +
+      "           [--repo-name <name>] [--branch <branch>]\n" +
       "\n" +
       "  scantrix init [dir]           Create a starter .auditrc.json\n" +
       "\n" +
@@ -98,6 +101,8 @@ try {
   const results = await scanRepo(repoPath, {
     checkOutdatedDependencies: checkUpdates,
     auditConfig,
+    repoName,
+    branch: branchOverride,
   });
 
   // ── Prevalence-based severity escalation ──────────────────────────

@@ -69,8 +69,8 @@ export function buildScanResult(
     seleniumTestFiles: raw.inventory.seleniumTestFiles,
   });
   const effectivePath = opts.repoPath ?? raw.repoPath;
-  // Normalize repo name to lowercase for consistency
-  const repoName = (effectivePath.split(/[/\\]/).pop() || "unknown").toLowerCase();
+  // Use explicit display name if provided, otherwise derive from path
+  const repoName = raw.repoDisplayName ?? (effectivePath.split(/[/\\]/).pop() || "unknown").toLowerCase();
 
   return {
     tool: "scantrix",
