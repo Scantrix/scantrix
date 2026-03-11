@@ -86,17 +86,17 @@ stages:
 
           - script: npm ci
             displayName: "Install dependencies"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
           - script: npm run build
             displayName: "Compile TypeScript"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
           - script: npm pack
             displayName: "Create tarball"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
-          - publish: $(Build.SourcesDirectory)/scantrix/scantrix-6.3.0.tgz
+          - publish: $(Pipeline.Workspace)/s/scantrix/scantrix-6.3.0.tgz
             artifact: scantrix-tarball
             displayName: "Publish Scantrix tarball"
 
