@@ -36,3 +36,4 @@ assets/_preview.html
 
 # Tool / debug artifacts
 .playwright-mcp/
+tmpclaude-*
