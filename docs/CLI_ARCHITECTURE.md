@@ -19,21 +19,21 @@ what it does and how it works, and gives step-by-step instructions for setting i
 
 ## What Is Scantrix?
 
-Scantrix is a **static analysis and configuration-aware auditing engine** for test
-automation repositories. It scans:
+Scantrix is a **static analysis and configuration-aware auditing tool** designed for evaluating large
+automation repositories. It inspects:
 
 - **Test code** — Playwright, Cypress, and Selenium projects
 - **Framework configuration** — `playwright.config.ts`, `cypress.config.js`, etc.
 - **CI pipelines** — GitHub Actions, Azure DevOps YAML
 
-It produces **prioritized findings** with risk scores, severity grades, and
-concrete recommendations — without ever executing your tests.
+Scantrix performs rule-based and pattern-based static analysis across test code, configuration objects, and CI pipeline definitions.  It gives teams full visibility into the health and maintainability of their automation stack. It delivers fast, actionable insights that help teams reduce flakiness, improve consistency, and enforce standards across Playwright, Cypress, and Selenium projects
 
 ### What It Does NOT Do
 
 - It does **not** run your tests
-- It does **not** modify your code
-- It does **not** connect to any database or external service
+- It does **not** modify, or mutate test code
+- It does **not** alter your repository
+- It does **not** connect to any databases, APIs, or external services
 
 ---
 
@@ -46,14 +46,14 @@ concrete recommendations — without ever executing your tests.
 └──────────────┘     └────────────┘     └──────────────┘     └──────────────┘
                            │
                     ┌──────┴──────┐
-                    │  50+ Rules  │
+                    │  85+ Rules  │
                     │  3 Frameworks│
                     │  CI Analysis │
                     └─────────────┘
 ```
 
 1. **Input** — Point the CLI at a repository directory on disk
-2. **Scan** — The engine runs 50+ rules across code, config, and CI pipelines
+2. **Scan** — The engine runs 85+ rules across code, config, and CI pipelines
 3. **Report** — Report artifacts are written (MD, HTML, JSON, SARIF, email)
 4. **Result** — Optionally, a canonical `ScanResult` JSON file is written via `--json-path`
 
@@ -66,7 +66,7 @@ concrete recommendations — without ever executing your tests.
 ```
 src/
 ├── cli.ts              # CLI entry point — args, subcommands
-├── scanner.ts          # Core scan engine — 50+ audit rules, framework detection
+├── scanner.ts          # Core scan engine — 85+ audit rules, framework detection
 ├── scanResult.ts       # ScanResult contract — canonical output shape
 ├── scoring.ts          # Risk score / grade calculation (single source of truth)
 ├── report.ts           # Report generation (Markdown, HTML, JSON, SARIF, email)
@@ -276,10 +276,6 @@ CLI flags take precedence over environment variables.
 
 ## Frequently Asked Questions
 
-**Q: Can I add a custom sink?**
-Yes. Implement the `Sink` interface from `src/sinks/types.ts` and add it to the
-`buildSinks()` factory in `src/sinks/index.ts`.
-
 **Q: What version of Node.js do I need?**
 Node.js 18 or later.
 
@@ -287,7 +283,6 @@ Node.js 18 or later.
 Open `audit-out/audit_summary.html` in a browser, or read `audit-out/audit_summary.md`
 in any Markdown viewer.
 
-**Q: Is the ScanResult schema stable?**
-Yes. The `ScanResult` interface is versioned and designed for backward compatibility.
-New fields may be added, but existing fields will not be renamed or removed without a
-major version bump.
+**Q: Does Scantrix support frameworks other than Playwright?**
+Scantrix includes support for Selenium and Cypress, with Playwright serving as the primary development focus.**
+

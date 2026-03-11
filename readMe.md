@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/scantrix-logo.svg" alt="Scantrix" width="420" />
+  <img src="docs/scantrix-logo-light.svg" alt="Scantrix" width="420" />
 </p>
 
 <h3 align="center">Static analysis for Playwright, Cypress, and Selenium test repositories</h3>
@@ -15,7 +15,7 @@
 
 ---
 
-Scantrix audits test automation repositories and CI pipelines. It scans Playwright, Cypress, and Selenium codebases against 87 rules, correlates code patterns with CI configuration, and produces prioritized, executive grade findings, all without executing a single test.
+Scantrix performs rule‑driven and pattern‑driven static analysis across test code, configuration files, repositories, and CI pipeline definitions. It provides clear visibility into the health and maintainability of automation frameworks, offering actionable insights that reduce flakiness, improve consistency, and enforce standards across Playwright, Cypress, and Selenium projects.
 
 ## What it does
 

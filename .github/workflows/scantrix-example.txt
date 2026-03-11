@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Run Scantrix Audit
-        uses: your-org/repo-audit-agent@v3
+        uses: your-org/scantrix-agent@v3
         with:
           repo-path: "."
           output-dir: "./scantrix-out"
