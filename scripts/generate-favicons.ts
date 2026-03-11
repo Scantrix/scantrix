@@ -1,8 +1,8 @@
 /**
  * generate-favicons.ts
  *
- * Renders docs/scantrix-icon.svg into PNG favicons at standard sizes
- * and combines the small sizes into a favicon.ico.
+ * Converts per-size SVG favicons in docs/ into PNGs and combines
+ * the small sizes into a favicon.ico.
  *
  * Usage:  npx ts-node scripts/generate-favicons.ts
  * Output: docs/favicons/
@@ -13,20 +13,20 @@ import fs from "fs/promises";
 import path from "path";
 
 const ROOT = path.resolve(__dirname, "..");
-const ICON_SVG = path.join(ROOT, "docs", "scantrix-icon.svg");
+const DOCS_DIR = path.join(ROOT, "docs");
 const OUT_DIR = path.join(ROOT, "docs", "favicons");
 
 interface SizeSpec {
   size: number;
-  filename: string;
+  svgFilename: string;
+  pngFilename: string;
 }
 
 const sizes: SizeSpec[] = [
-  { size: 16, filename: "favicon-16.png" },
-  { size: 32, filename: "favicon-32.png" },
-  { size: 48, filename: "favicon-48.png" },
-  { size: 180, filename: "apple-touch-icon.png" },
-  { size: 512, filename: "icon-512.png" },
+  { size: 16, svgFilename: "favicon-16.svg", pngFilename: "favicon-16.png" },
+  { size: 32, svgFilename: "favicon-32.svg", pngFilename: "favicon-32.png" },
+  { size: 48, svgFilename: "favicon-48.svg", pngFilename: "favicon-48.png" },
+  { size: 64, svgFilename: "favicon-64.svg", pngFilename: "favicon-64.png" },
 ];
 
 /** Build a favicon.ico from multiple PNG buffers (ICO container format). */
@@ -74,27 +74,26 @@ function buildIco(pngs: { size: number; data: Buffer }[]): Buffer {
 }
 
 async function main() {
-  const svgBuffer = await fs.readFile(ICON_SVG);
   await fs.mkdir(OUT_DIR, { recursive: true });
 
   const pngBuffers: { size: number; data: Buffer }[] = [];
 
   for (const spec of sizes) {
+    const svgPath = path.join(DOCS_DIR, spec.svgFilename);
+    const svgBuffer = await fs.readFile(svgPath);
+
     const pngData = await sharp(svgBuffer, { density: 400 })
       .resize(spec.size, spec.size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
 
-    await fs.writeFile(path.join(OUT_DIR, spec.filename), pngData);
-    console.log(`  ${spec.filename} (${spec.size}x${spec.size})`);
+    await fs.writeFile(path.join(OUT_DIR, spec.pngFilename), pngData);
+    console.log(`  ${spec.pngFilename} (${spec.size}x${spec.size})`);
 
-    // Collect small sizes for ICO
-    if (spec.size <= 48) {
-      pngBuffers.push({ size: spec.size, data: pngData });
-    }
+    pngBuffers.push({ size: spec.size, data: pngData });
   }
 
-  // Build favicon.ico from 16, 32, 48
+  // Build favicon.ico from all sizes
   const icoData = buildIco(pngBuffers);
   await fs.writeFile(path.join(OUT_DIR, "favicon.ico"), icoData);
   console.log(`  favicon.ico (${pngBuffers.map(p => p.size).join("+")})`);

@@ -17,7 +17,12 @@
   },
   "keywords": [],
   "author": "",
-  "license": "AGPL-3.0-only",
+  "license": "MIT",
+  "files": [
+    "dist/",
+    "LICENSE",
+    "README.md"
+  ],
   "type": "commonjs",
   "dependencies": {
     "fast-glob": "^3.3.3",

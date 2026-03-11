@@ -9,6 +9,7 @@ dist/
 
 # Audit output (generated)
 audit-out/
+scantrix-out/
 
 # Environment files
 .env
@@ -26,16 +27,12 @@ Thumbs.db
 # Claude Code
 .claude/
 
-# Binary / marketing docs
+# Binary files
 *.docx
 
 # Dev scratch files
 notes.txt
 assets/_preview.html
-scantrixDBqueries.txt
 
 # Tool / debug artifacts
 .playwright-mcp/
-
-# Database (generated)
-dashboard/data/

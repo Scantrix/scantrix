@@ -905,6 +905,8 @@ async function loadSidebarLogoSvg(): Promise<string | undefined> {
 
 async function loadFaviconDataUri(): Promise<string | undefined> {
   const candidates = [
+    path.join(__dirname, "..", "docs", "high-res-icon.svg"),
+    path.join(process.cwd(), "docs", "high-res-icon.svg"),
     path.join(__dirname, "..", "docs", "scantrix-icon.svg"),
     path.join(process.cwd(), "docs", "scantrix-icon.svg"),
   ];
@@ -1823,7 +1825,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
   }
   md.push(``);
   md.push(`<div class="report-footer-text"><b>Questions?</b> Contact QA Engineering team for remediation guidance.</div>`);
-  md.push(`<div class="report-footer-text"><b>https://github.com/stamez/scantrix</b></div>`);
+  md.push(`<div class="report-footer-text"><b>https://github.com/scantrix/scantrix</b></div>`);
   md.push(``);
   md.push(`</div>`);
 
