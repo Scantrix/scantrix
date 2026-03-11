@@ -24,7 +24,7 @@ parameters:
     displayName: "ADO project name (for display)"
 
 jobs:
-  - job: Scan_${{ replace(parameters.repoName, '-', '_') }}
+  - job: Scan_${{ replace(replace(parameters.repoName, '-', '_'), '.', '_') }}
     displayName: "Scan ${{ parameters.project }}/${{ parameters.repoName }}"
     pool:
       vmImage: "ubuntu-latest"
