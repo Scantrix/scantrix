@@ -20,6 +20,7 @@
   "license": "MIT",
   "files": [
     "dist/",
+    "docs/*.svg",
     "LICENSE",
     "README.md"
   ],
@@ -27,7 +28,8 @@
   "dependencies": {
     "fast-glob": "^3.3.3",
     "markdown-it": "^14.1.0",
-    "minimist": "^1.2.8"
+    "minimist": "^1.2.8",
+    "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
@@ -36,7 +38,6 @@
     "@types/sharp": "^0.31.1",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3",
     "vitest": "^3.0.0"
   }
 }

@@ -72,11 +72,17 @@ export type ScanResults = {
   gitBranch?: string;
   /** Git commit SHA at time of scan */
   gitCommit?: string;
+  /** Overridden display name for the repository */
+  repoDisplayName?: string;
 };
 
 export type ScanOptions = {
   checkOutdatedDependencies?: boolean;
   auditConfig?: AuditConfig;
+  /** Override detected repository name in reports */
+  repoName?: string;
+  /** Override detected Git branch in reports */
+  branch?: string;
 };
 
 type SimpleVersion = { major: number; minor: number; patch: number };
@@ -1500,6 +1506,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   }
 
   const git = getGitInfo(repoPath);
+  if (options.branch) git.branch = options.branch;
 
   const allFiles = (await fg(["**/*"], {
     cwd: repoPath,
@@ -3446,7 +3453,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       evidence: [{ file: repoPath, line: 1, snippet: "No pipeline YAML files found." }],
     });
 
-    return { repoPath, inventory, findings, gitBranch: git.branch, gitCommit: git.commit };
+    return { repoPath, inventory, findings, gitBranch: git.branch, gitCommit: git.commit, repoDisplayName: options.repoName };
   }
 
   // CI-002

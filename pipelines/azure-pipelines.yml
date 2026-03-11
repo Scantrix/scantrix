@@ -27,7 +27,7 @@ schedules:
     displayName: "Daily Scantrix Scan"
     branches:
       include:
-        - main
+        - develop
     always: true        # Run even if no source changes
 
 # ---------------------------------------------------------------------------
@@ -35,7 +35,7 @@ schedules:
 # Override at job level if you need a self-hosted agent
 # ---------------------------------------------------------------------------
 pool:
-  vmImage: "ubuntu-latest"
+  name: "On-Premise"
 
 # ---------------------------------------------------------------------------
 # Repositories
@@ -57,13 +57,13 @@ resources:
       type: github
       endpoint: GitHub-Scantrix        # ADO service connection name
       name: Scantrix/scantrix
-      ref: refs/heads/main
+      ref: refs/heads/develop
 
     # ── Target ADO repos ─────────────────────────────────────────────
     - repository: service-playwright
       type: git
       name: IT-Service Value Stream/Service.Playwright.Automation
-      ref: refs/heads/main
+      ref: refs/heads/develop
 
 # =========================================================================
 # Stage 1 — Build Scantrix (from GitHub)
@@ -86,17 +86,17 @@ stages:
 
           - script: npm ci
             displayName: "Install dependencies"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
           - script: npm run build
             displayName: "Compile TypeScript"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
           - script: npm pack
             displayName: "Create tarball"
-            workingDirectory: $(Build.SourcesDirectory)/scantrix
+            workingDirectory: $(Pipeline.Workspace)/s/scantrix
 
-          - publish: $(Build.SourcesDirectory)/scantrix/scantrix-6.3.0.tgz
+          - publish: $(Pipeline.Workspace)/s/scantrix/scantrix-6.3.0.tgz
             artifact: scantrix-tarball
             displayName: "Publish Scantrix tarball"
 

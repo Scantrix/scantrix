@@ -1492,7 +1492,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
 
   // Compact metadata bar
   md.push(`<div class="report-meta">`);
-  md.push(`<span class="meta-item"><strong>Repository:</strong> <code>${results.repoPath.split(/[/\\]/).pop()}</code></span>`);
+  md.push(`<span class="meta-item"><strong>Repository:</strong> <code>${results.repoDisplayName ?? results.repoPath.split(/[/\\]/).pop()}</code></span>`);
   md.push(`<span class="meta-item"><strong>Branch:</strong> <code>${results.gitBranch ?? 'unknown'}</code></span>`);
   md.push(`<span class="meta-item"><strong>Generated:</strong> ${new Date().toLocaleString('en-US', { dateStyle: 'long', timeStyle: 'short' })}</span>`);
   md.push(`<span class="meta-item"><strong>Playwright:</strong> ${results.inventory.playwrightVersion ?? 'Unknown'}</span>`);
