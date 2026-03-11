@@ -876,20 +876,25 @@ ${bodyHtml}
 }
 
 async function loadFooterLogoDataUri(): Promise<string | undefined> {
-  // Prefer a stable asset path; keep failure non-fatal.
-  const logoPath = path.join(process.cwd(), "docs", "scantrix-logo-wide.svg");
-  try {
-    const bytes = await fs.readFile(logoPath);
-    return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
-  } catch {
-    return undefined;
+  // Prefer package-relative path, then fall back to cwd.
+  const candidates = [
+    path.join(__dirname, "..", "docs", "scantrix-logo-light.svg"),
+    path.join(process.cwd(), "docs", "scantrix-logo-light.svg"),
+  ];
+  for (const p of candidates) {
+    try {
+      const bytes = await fs.readFile(p);
+      return `data:image/svg+xml;base64,${bytes.toString("base64")}`;
+    } catch { /* try next */ }
   }
+  return undefined;
 }
 
 async function loadSidebarLogoSvg(): Promise<string | undefined> {
-  // Try co-located docs/ first, then fall back to project root docs/.
+  // Try package-relative docs/ first, then fall back to cwd docs/.
   const candidates = [
-    path.join(__dirname, "..", "docs", "scantrix-sidebar.svg"),
+    path.join(__dirname, "..", "docs", "scantrix-logo.svg"),
+    path.join(__dirname, "..", "docs", "scantrix-logo-light.svg"),
     path.join(process.cwd(), "docs", "scantrix-logo.svg"),
   ];
   for (const p of candidates) {
@@ -1870,7 +1875,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     "utf8"
   );
 
-  const repoName = results.repoPath.split(/[/\\]/).pop() || "unknown";
+  const repoName = results.repoDisplayName ?? (results.repoPath.split(/[/\\]/).pop() || "unknown");
   await fs.writeFile(
     path.join(outDir, "findings.json"),
     JSON.stringify({ repoName, findings: findingsSorted }, null, 2),

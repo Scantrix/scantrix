@@ -10,7 +10,7 @@
       <path id="I" fill="#E2E8F0" stroke="#4F7BE3" stroke-miterlimit="10" d="M5464.862,1088.438V502.439h90l-1,586L5464.862,1088.438L5464.862,1088.438z"/>
       <g id="x-symbol">
         <g id="x-lambda">
-          <polyline id="x-left-leg" fill="#4F7BE3" stroke="#4F7BE3" stroke-width="0.5741" stroke-miterlimit="10" points="5947.619,759.454 5643.201,1089.601 5779.215,1089.661 6006.718,848.078"/>
+          <polyline id="x-left-leg" fill="#4F7BE3" stroke="#4F7BE3" stroke-width="5.5741" stroke-miterlimit="10" points="5947.619,759.454 5643.201,1089.601 5779.215,1089.661 6006.718,848.078"/>
           <polygon fill="#4F7BE3" stroke="#4F7BE3" stroke-width="0.5741" stroke-miterlimit="10" points="5874.464,720.387 5920.947,794.389 6109.699,1089.193 6306.681,1089.193 6306.681,982.781 6176.018,982.781 5864.479,502.379 5645.393,502.146 5645.393,587.705 5789.331,587.705"/>
         </g>
         <polygon id="x-accent" fill="#D9D9D9" stroke="#4F7BE3" stroke-miterlimit="10" points="6085.972,759.454 6309.545,501.228 6188.555,501.217 6035.638,682.766"/>
