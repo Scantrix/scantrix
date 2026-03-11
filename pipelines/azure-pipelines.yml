@@ -35,7 +35,7 @@ schedules:
 # Override at job level if you need a self-hosted agent
 # ---------------------------------------------------------------------------
 pool:
-  vmImage: "ubuntu-latest"
+  name: "On-Premise"
 
 # ---------------------------------------------------------------------------
 # Repositories
