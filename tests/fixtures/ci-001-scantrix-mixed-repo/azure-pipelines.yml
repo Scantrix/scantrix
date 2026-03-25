@@ -1,0 +1,35 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  CI: 'true'
+
+steps:
+  - task: NodeTool@0
+    inputs:
+      versionSpec: '18.x'
+
+  - script: npm ci
+    displayName: 'Install dependencies'
+
+  - script: npx playwright install --with-deps chromium
+    displayName: 'Install Playwright browsers'
+
+  - script: npx playwright test
+    displayName: 'Run Playwright tests'
+    timeoutInMinutes: 30
+
+  - task: PublishPipelineArtifact@1
+    condition: always()
+    inputs:
+      targetPath: 'playwright-report'
+      artifact: 'playwright-report'
+
+  - task: PublishTestResults@2
+    condition: always()
+    inputs:
+      testResultsFormat: 'JUnit'
+      testResultsFiles: 'results/junit.xml'

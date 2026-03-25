@@ -1,0 +1,9 @@
+trigger:
+  - main
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+steps:
+  - script: npx scantrix scan .
+    displayName: 'Run Scantrix audit'

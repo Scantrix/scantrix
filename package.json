@@ -1,6 +1,6 @@
 {
   "name": "scantrix",
-  "version": "6.3.0",
+  "version": "6.3.1",
   "description": "Static analysis and configuration-aware auditing engine for automation repositories",
   "main": "dist/cli.js",
   "bin": {

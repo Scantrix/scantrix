@@ -1009,10 +1009,16 @@ function isEnvDriven(expr: string): boolean {
   return /process\.env\b/.test(expr) || /\bparseInt\s*\(/.test(expr);
 }
 
-function retriesLikelyEnabled(retriesExpr?: string) {
+export function retriesLikelyEnabled(retriesExpr?: string) {
   if (!retriesExpr) return false;
   if (/^\s*0\s*$/.test(retriesExpr)) return false;
-  if (retriesExpr.includes("?") && retriesExpr.includes(":")) return true;
+  if (retriesExpr.includes("?") && retriesExpr.includes(":")) {
+    // For simple numeric ternaries (e.g. `process.env.CI ? 2 : 0`), only
+    // treat retries as enabled when at least one branch is greater than zero.
+    const m = retriesExpr.match(/\?\s*(\d+)\s*:\s*(\d+)\s*$/);
+    if (m) return Number(m[1]) > 0 || Number(m[2]) > 0;
+    return true;
+  }
 
   const nums = [...retriesExpr.matchAll(/\b(\d+)\b/g)].map((m) => Number(m[1]));
   if (nums.some((n) => Number.isFinite(n) && n > 0)) return true;
@@ -3441,7 +3447,16 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
   // CI findings
   const ci = inventory.ciSummary!;
 
-  if (!ci.files.length) {
+  // CI-001 only: exclude pipeline files whose filename/path (relative to the
+  // repo root) contains "scantrix" (case-insensitive). Those are Scantrix
+  // audit pipelines, not the target repo's product CI pipeline, and must not
+  // satisfy the "CI exists" check.
+  const nonScantrixCiFiles = ci.files.filter((f) => {
+    const rel = normalize(path.relative(repoPath, f.file)).toLowerCase();
+    return !rel.includes("scantrix");
+  });
+
+  if (!nonScantrixCiFiles.length) {
     findings.push({
       findingId: "CI-001",
       severity: "medium",

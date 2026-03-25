@@ -471,6 +471,35 @@ describe("missing repo path", () => {
   });
 });
 
+// ─── CI-001: Scantrix pipeline exclusion ─────────────────────────────
+describe("CI-001 — scantrix pipeline exclusion", () => {
+  it("fires CI-001 when the only pipeline files contain 'scantrix' in their name", async () => {
+    const results = await scanRepo(
+      path.join(FIXTURES, "ci-001-scantrix-only-repo"),
+      { checkOutdatedDependencies: false },
+    );
+    expect(hasFinding(results, "CI-001")).toBe(true);
+  }, 30_000);
+
+  it("fires CI-001 for both lowercase and uppercase 'scantrix' filenames (case-insensitive)", async () => {
+    const results = await scanRepo(
+      path.join(FIXTURES, "ci-001-scantrix-only-repo"),
+      { checkOutdatedDependencies: false },
+    );
+    // The fixture has azure-pipelines-scantrix.yml (lower) and SCANTRIX-pipeline.yml (upper);
+    // both should be ignored, so CI-001 must still fire.
+    expect(hasFinding(results, "CI-001")).toBe(true);
+  }, 30_000);
+
+  it("does NOT fire CI-001 when a non-scantrix pipeline exists alongside scantrix ones", async () => {
+    const results = await scanRepo(
+      path.join(FIXTURES, "ci-001-scantrix-mixed-repo"),
+      { checkOutdatedDependencies: false },
+    );
+    expect(hasFinding(results, "CI-001")).toBe(false);
+  }, 30_000);
+});
+
 // ─── CI-012: List-style Azure variable detection ─────────────────────
 describe("CI-012 — list-style Azure DevOps variables", () => {
   it("does NOT fire CI-012 when all pipelines set CI=true via list-style variables", async () => {
