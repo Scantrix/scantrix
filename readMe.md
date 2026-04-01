@@ -2,7 +2,10 @@
   <img src="docs/scantrix-logo-light.svg" alt="Scantrix" width="420" />
 </p>
 
-<h3 align="center">Static analysis for Playwright, Cypress, and Selenium test repositories</h3>
+<h3 align="center">
+  Static analysis for Playwright, Cypress, and Selenium test suites.<br/>
+  Find out <em>why</em> your tests are broken, not just that they are.
+</h3>
 
 <p align="center">
   <a href="#quick-start">Quick Start</a> &middot;
@@ -15,23 +18,44 @@
 
 ---
 
-Scantrix performs rule‑driven and pattern‑driven static analysis across test code, configuration files, repositories, and CI pipeline definitions. It provides clear visibility into the health and maintainability of automation frameworks, offering actionable insights that reduce flakiness, improve consistency, and enforce standards across Playwright, Cypress, and Selenium projects.
+Most tools tell you a test failed. **Scantrix tells you why your entire approach is failing** and exactly what to do about it.
 
-## What it does
+By correlating code patterns, framework design, and CI configuration across **87 detection rules**, Scantrix surfaces root causes behind flaky tests, unstable pipelines, and hard-to-scale test suites. No test execution. No credentials. No file modifications. Just answers.
 
-- Detects flaky patterns (hard waits, force clicks, non-retrying assertions, missing awaits)
-- Analyzes Playwright, Cypress, and Selenium configuration for misconfigurations
-- Scans CI pipelines (GitHub Actions, Azure DevOps) for inconsistencies
-- Produces correlated insights (e.g., retries masking flakiness, CI worker mismatches)
-- Scores repository health (A–F grade) with density-normalized risk calculation
-- Tracks trends across scans with automatic snapshots and diff summaries
+### EXAMPLE FINDING
+![Example Finding](docs/images/example-finding.png)
 
-## What it does NOT do
+### RISK OVERVIEW
 
-- Does not execute tests
-- Does not modify any files in the target repository
-- Does not make network connections beyond the local filesystem
-- Does not require credentials or access tokens to scan
+![Risk Overview](docs/images/risk-overview.png)
+
+### RECOMMENDED ACTIONS
+
+![Recommended Actions](docs/images/recommendations.jpg)
+
+
+## What Scantrix Diagnoses
+
+**Flaky test root causes.** Not just which tests fail, but exactly why they fail and what will actually fix them.
+
+**Framework-level design debt.** Structural patterns that silently destabilize entire test suites before anyone realizes something is wrong.
+
+**CI configuration risks.** The environmental factors making your pipeline unpredictable run to run.
+
+**Blast radius of bad patterns.** One anti-pattern can affect hundreds of tests. Scantrix quantifies that exposure so you know where to act first.
+
+**Execution waste.** Where time is being burned in your pipeline and the precise changes that recover it.
+
+
+## What Scantrix Does NOT Do
+
+Scantrix is a read-only static analysis tool. <br>
+-  It does not execute your tests <br>
+-  It does not modify any files in the target repository <br>
+-  It does not make network connections beyond the local filesystem <br>
+-  It does not require credentials and access tokens of any kind </br>
+
+Point it at a repo and it does its job cleanly.<br>
 
 ## Quick Start
 
@@ -51,12 +75,14 @@ npm run audit -- /path/to/repo --out ./audit-out
 
 ## Output Formats
 
+Every scan produces an **overall risk grade (A through F)** alongside severity-bucketed findings, ready for dashboards, PR comments, or executive reporting.
+
 | Format | File | Description |
 |--------|------|-------------|
-| Markdown | `audit_summary.md` | Primary report — executive-grade findings with hotspots |
-| HTML | `audit_summary.html` | Styled HTML report for browser viewing |
+| Markdown | `audit_summary.md` | Primary report with executive-grade findings and hotspots |
+| HTML | `audit_summary.html` | Styled report for browser viewing |
 | JSON | `findings.json` | Machine-readable findings array |
-| SARIF | `audit.sarif` | GitHub Code Scanning / Azure DevOps compatible |
+| SARIF | `audit.sarif` | Native GitHub Code Scanning and Azure DevOps support — findings appear directly in the Security tab |
 | Email | `audit_email.html` | Email-ready HTML summary |
 
 Use `--format` to select specific formats:
@@ -65,6 +91,8 @@ Use `--format` to select specific formats:
 node dist/cli.js /path/to/repo --out ./audit-out --format md,json,sarif
 ```
 
+
+
 ## CLI Reference
 
 ```
@@ -72,7 +100,7 @@ scantrix <repoPath> [options]
 scantrix init [dir]
 ```
 
-### Scan options
+### Scan Options
 
 | Flag | Description | Default |
 |------|-------------|---------|
@@ -84,13 +112,13 @@ scantrix init [dir]
 | `--no-trend` | Disable automatic snapshot saving | off |
 | `--json-path <path>` | Write canonical `ScanResult` JSON to this path | — |
 
-### Environment variables
+### Environment Variables
 
 | Variable | Description |
 |----------|-------------|
 | `SCANTRIX_JSON_PATH` | Write canonical results JSON to this path |
 
-### Init subcommand
+### Init Subcommand
 
 ```bash
 # Create a starter .auditrc.json in the target repo
@@ -121,7 +149,7 @@ Use Scantrix in CI with the provided composite action:
     fail-on-high: "true"    # Block merges with high-severity findings
 ```
 
-### Action inputs
+### Action Inputs
 
 | Input | Description | Default |
 |-------|-------------|---------|
@@ -133,7 +161,7 @@ Use Scantrix in CI with the provided composite action:
 | `post-comment` | Post summary comment on PRs | `true` |
 | `fail-on-high` | Fail if high-severity findings exist | `false` |
 
-### Action outputs
+### Action Outputs
 
 | Output | Description |
 |--------|-------------|
@@ -141,19 +169,8 @@ Use Scantrix in CI with the provided composite action:
 | `high-count` | Number of high-severity findings |
 | `medium-count` | Number of medium-severity findings |
 | `low-count` | Number of low-severity findings |
-| `risk-grade` | Overall risk grade (A–F) |
+| `risk-grade` | Overall risk grade (A through F) |
 | `report-path` | Path to generated report directory |
-
-## Trend Tracking
-
-Every scan automatically saves a snapshot to `<outDir>/snapshots/` with git branch, commit SHA, and file counts. On subsequent scans, Scantrix compares against the latest baseline and reports:
-
-- New and resolved findings
-- Evidence-level diffs (added/removed file:line locations)
-- Inventory changes (total files, test file counts)
-- One-line console delta summary
-
-Disable with `--no-trend`.
 
 ## Documentation
 
