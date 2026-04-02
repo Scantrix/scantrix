@@ -16,6 +16,18 @@
   <a href="#license">License</a>
 </p>
 
+<p align="center">
+  <a href="https://github.com/Scantrix/scantrix/actions/workflows/ci.yml">
+    <img src="https://img.shields.io/github/actions/workflow/status/Scantrix/scantrix/ci.yml?branch=main&label=build" alt="Build Status" />
+  </a>
+  <a href="https://www.npmjs.com/package/scantrix">
+    <img src="https://img.shields.io/npm/v/scantrix?color=cb3837&logo=npm&logoColor=white" alt="NPM Version" />
+  </a>
+  <a href="#license">
+    <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT" />
+  </a>
+</p>
+
 ---
 
 Most tools tell you a test failed. **Scantrix tells you why your entire approach is failing** and exactly what to do about it.
