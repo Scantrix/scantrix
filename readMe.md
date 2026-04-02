@@ -3,8 +3,8 @@
 </p>
 
 <h3 align="center">
-  Static analysis for Playwright, Cypress, and Selenium test suites.<br/>
-  Find out <em>why</em> your tests are broken, not just that they are.
+<em>Playwright</em> · <em>Cypress</em> ·<em> Selenium</em></br>
+Find out why your tests keep failing, without running a single one.
 </h3>
 
 <p align="center">
@@ -30,12 +30,25 @@
 
 ---
 
-Most tools tell you a test failed. **Scantrix tells you why your entire approach is failing** and exactly what to do about it.
+Most tools tell you a test failed. **Scantrix tells you why your entire approach is failing** and exactly how to fix it.
 
-By correlating code patterns, framework design, and CI configuration across **87 detection rules**, Scantrix surfaces root causes behind flaky tests, unstable pipelines, and hard-to-scale test suites. No test execution. No credentials. No file modifications. Just answers.
+ No test execution. No credentials. No file modifications. Just root causes.
 
 ### EXAMPLE FINDING
 ![Example Finding](docs/images/findings.svg)
+
+### KEY CAPABILITIES
+  >
+  >| Capability        | Traditional Reporters     | Scantrix                          |
+  >|-------------------|---------------------------|-----------------------------------|
+  >| Analysis          | Runtime (Post-Failure)    | Static (Pre-emptive)              |
+  >| Scope             | Single Test Result        | Repository-wide Health            |
+  >| Root Cause        | Stack Trace only          | Correlated Design Patterns        |
+  >| Actionability     | "Test Failed"             | Step-by-step Fix Guidance         |
+  >| CI Impact         | Log bloat                 | CI Pipeline Optimization          |
+  >| Security          | Requires Tokens           | Zero-Footprint (Local Execution)  |
+
+</br>
 
 ### RISK OVERVIEW
 
@@ -60,14 +73,12 @@ By correlating code patterns, framework design, and CI configuration across **87
 
 
 ## What Scantrix Does NOT Do
-
-Scantrix is a read-only static analysis tool. <br>
+Scantrix operates as a zero-footprint, read-only analyzer, ensuring repository integrity while maintaining a strict security posture. <br>
 -  It does not execute your tests <br>
 -  It does not modify any files in the target repository <br>
 -  It does not make network connections beyond the local filesystem <br>
 -  It does not require credentials and access tokens of any kind </br>
 
-Point it at a repo and it does its job cleanly.<br>
 
 ## Quick Start
 
