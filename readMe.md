@@ -23,15 +23,15 @@ Most tools tell you a test failed. **Scantrix tells you why your entire approach
 By correlating code patterns, framework design, and CI configuration across **87 detection rules**, Scantrix surfaces root causes behind flaky tests, unstable pipelines, and hard-to-scale test suites. No test execution. No credentials. No file modifications. Just answers.
 
 ### EXAMPLE FINDING
-![Example Finding](docs/images/example-finding.png)
+![Example Finding](docs/images/findings.svg)
 
 ### RISK OVERVIEW
 
-![Risk Overview](docs/images/risk-overview.png)
+![Risk Overview](docs/images/risk.svg)
 
 ### RECOMMENDED ACTIONS
 
-![Recommended Actions](docs/images/recommendations.jpg)
+![Recommended Actions](docs/images/recommendations.svg)
 
 
 ## What Scantrix Diagnoses
@@ -194,4 +194,4 @@ npm run test:watch
 
 ## License
 
-[AGPL-3.0](LICENSE) — Copyright (c) 2025 Shawn Tamez / Scantrix
+[AGPL-3.0](LICENSE) — Copyright (c) 2026 Shawn Tamez / Scantrix
