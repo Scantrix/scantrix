@@ -4,7 +4,7 @@
 
 <h3 align="center">
 <em>Playwright</em> · <em>Cypress</em> ·<em> Selenium</em></br>
-Find out why your tests keep failing, without running a single one.
+Find out why your tests keep failing without running a single one.
 </h3>
 
 <p align="center">
@@ -41,12 +41,12 @@ Most tools tell you a test failed. **Scantrix tells you why your entire approach
   >
   >| Capability        | Traditional Reporters     | Scantrix                          |
   >|-------------------|---------------------------|-----------------------------------|
-  >| Analysis          | Runtime (Post-Failure)    | Static (Pre-emptive)              |
-  >| Scope             | Single Test Result        | Repository-wide Health            |
+  >| Analysis          | Runtime (Post Failure)    | Static (Pre-emptive)              |
+  >| Scope             | Single Test Result        | Repository wide Health            |
   >| Root Cause        | Stack Trace only          | Correlated Design Patterns        |
   >| Actionability     | "Test Failed"             | Step-by-step Fix Guidance         |
   >| CI Impact         | Log bloat                 | CI Pipeline Optimization          |
-  >| Security          | Requires Tokens           | Zero-Footprint (Local Execution)  |
+  >| Security          | Requires Tokens           | Zero Footprint (Local Execution)  |
 
 </br>
 
