@@ -65,7 +65,8 @@ runs:
       id: audit
       shell: bash
       run: |
-        ARGS="${{ inputs.repo-path }} --out ${{ inputs.output-dir }} --format ${{ inputs.format }}"
+        RESULTS_PATH="${{ inputs.output-dir }}/scantrix-results.json"
+        ARGS="${{ inputs.repo-path }} --out ${{ inputs.output-dir }} --format ${{ inputs.format }} --json-path $RESULTS_PATH"
 
         if [ "${{ inputs.config-path }}" != "" ]; then
           ARGS="$ARGS --config ${{ inputs.config-path }}"
@@ -78,18 +79,19 @@ runs:
         echo "[scantrix] Running: scantrix $ARGS"
         npx scantrix $ARGS
 
-        # Parse findings.json for outputs
-        FINDINGS_FILE="${{ inputs.output-dir }}/findings.json"
-        if [ -f "$FINDINGS_FILE" ]; then
-          TOTAL=$(jq 'length' "$FINDINGS_FILE")
-          HIGH=$(jq '[.[] | select(.severity == "high")] | length' "$FINDINGS_FILE")
-          MEDIUM=$(jq '[.[] | select(.severity == "medium")] | length' "$FINDINGS_FILE")
-          LOW=$(jq '[.[] | select(.severity == "low")] | length' "$FINDINGS_FILE")
+        # Parse outputs from canonical ScanResult JSON
+        if [ -f "$RESULTS_PATH" ]; then
+          TOTAL=$(jq '.summary.total' "$RESULTS_PATH")
+          HIGH=$(jq '.summary.high' "$RESULTS_PATH")
+          MEDIUM=$(jq '.summary.medium' "$RESULTS_PATH")
+          LOW=$(jq '.summary.low' "$RESULTS_PATH")
+          GRADE=$(jq -r '.summary.riskGrade' "$RESULTS_PATH")
 
           echo "findings-count=$TOTAL" >> $GITHUB_OUTPUT
           echo "high-count=$HIGH" >> $GITHUB_OUTPUT
           echo "medium-count=$MEDIUM" >> $GITHUB_OUTPUT
           echo "low-count=$LOW" >> $GITHUB_OUTPUT
+          echo "risk-grade=$GRADE" >> $GITHUB_OUTPUT
           echo "report-path=${{ inputs.output-dir }}" >> $GITHUB_OUTPUT
         fi
 
@@ -112,8 +114,9 @@ runs:
           const findingsFile = path.join(outDir, 'findings.json');
           const diffFile = path.join(outDir, 'audit_diff.json');
 
-          if (!fs.existsSync(findingsFile)) {
-            console.log('No findings.json found, skipping comment');
+          const resultsFile = path.join(outDir, 'scantrix-results.json');
+          if (!fs.existsSync(findingsFile) || !fs.existsSync(resultsFile)) {
+            console.log('No findings.json or scantrix-results.json found, skipping comment');
             return;
           }
 
@@ -123,10 +126,9 @@ runs:
           const low = findings.filter(f => f.severity === 'low').length;
           const total = findings.length;
 
-          // Grade calculation (mirrors scoring.ts health score logic)
-          const riskPoints = high * 10 + medium * 4 + low * 1;
-          const score = Math.round(100 * Math.exp(-riskPoints / 80));
-          const grade = score >= 80 ? 'A' : score >= 60 ? 'B' : score >= 40 ? 'C' : score >= 30 ? 'D' : 'F';
+          // Read grade from canonical ScanResult (computed by scoring.ts)
+          const results = JSON.parse(fs.readFileSync(resultsFile, 'utf8'));
+          const grade = results.summary.riskGrade;
           const gradeEmoji = { A: '🟢', B: '🔵', C: '🟡', D: '🟠', F: '🔴' }[grade] || '⚪';
 
           let body = `## ${gradeEmoji} Scantrix Audit Report\n\n`;

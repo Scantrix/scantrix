@@ -177,7 +177,7 @@ written via `--json-path`. Its shape is stable and versioned.
 
 ```bash
 # Clone and build
-git clone https://your-org/scantrix.git
+git clone https://github.com/Scantrix/scantrix.git
 cd scantrix
 npm ci
 npm run build

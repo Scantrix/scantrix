@@ -19,7 +19,7 @@ steps:
       versionSpec: '18.x'
 
   - script: |
-      git clone https://your-org/scantrix.git /tmp/audit-agent
+      git clone https://github.com/Scantrix/scantrix.git /tmp/audit-agent
       cd /tmp/audit-agent && npm ci
     displayName: 'Install Audit Agent'
 
@@ -56,7 +56,7 @@ jobs:
 
       - name: Clone Audit Agent
         run: |
-          git clone https://your-org/scantrix.git /tmp/audit-agent
+          git clone https://github.com/Scantrix/scantrix.git /tmp/audit-agent
           cd /tmp/audit-agent && npm ci
 
       - name: Run Audit
