@@ -80,7 +80,7 @@ async function main() {
     if (formats.length === 0) formats = undefined; // fall back to all
   }
 
-  // ── Resolve baseline for diff / trend tracking ─────────────────────
+  // ── Resolve baseline for diff tracking ───────────────────────────────
   let resolvedBaseline = diffPath;
   let baselineMeta: SnapshotMeta | undefined;
   if (!resolvedBaseline && !noTrend) {
@@ -119,16 +119,16 @@ try {
   });
   console.log(`[audit] wrote report to: ${outDir}`);
 
-  // ── Auto-snapshot for trend tracking ───────────────────────────────
+  // ── Auto-snapshot ─────────────────────────────────────────────────
   if (!noTrend) {
     await saveSnapshot(outDir, results.findings, {
       inventory: results.inventory,
       repoPath: absRepo,
     });
-    console.log(`[trend] Snapshot saved to ${outDir}/snapshots/`);
+    console.log(`[snapshot] Saved to ${outDir}/snapshots/`);
   }
 
-  // ── Console trend summary ──────────────────────────────────────────
+  // ── Console diff summary ───────────────────────────────────────────
   if (resolvedBaseline) {
     const baseline = await loadBaseline(resolvedBaseline);
     if (baseline.length > 0) {
@@ -139,7 +139,7 @@ try {
       console.log(formatDiffConsoleSummary(diff));
     }
   } else if (!noTrend) {
-    console.log("[trend] First scan — no baseline to compare.");
+    console.log("[diff] First scan — no baseline to compare.");
   }
 
   // ── Write canonical ScanResult JSON ────────────────────────────────

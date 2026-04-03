@@ -3496,7 +3496,7 @@ export async function scanRepo(repoPath: string, options: ScanOptions = {}): Pro
       severity: "medium",
       title: "CI may not publish JUnit test results",
       description:
-        "Playwright is configured to output JUnit (test-results.xml) in CI, but the pipeline YAML does not clearly publish test results. This makes test reporting and trend tracking harder.",
+        "Playwright is configured to output JUnit (test-results.xml) in CI, but the pipeline YAML does not clearly publish test results. This makes test reporting harder.",
       recommendation:
         "Publish test-results.xml as test results (ADO: PublishTestResults task; GHA: upload artifact + test reporter integration if used).",
       evidence: ci.files.slice(0, 3).map((f) => ({

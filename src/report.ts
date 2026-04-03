@@ -1452,7 +1452,7 @@ function categorizeFindings(findings: ScanResults["findings"]): QuickWinCategory
 }
 
 export interface ReportOptions {
-  /** Path to baseline findings.json for diff/trend tracking */
+  /** Path to baseline findings.json for diff comparison */
   baselinePath?: string;
   /** Baseline snapshot meta (used for inventory comparison) */
   baselineMeta?: SnapshotMeta;
@@ -1903,7 +1903,7 @@ export async function writeReportArtifacts(outDir: string, results: ScanResults,
     );
   }
 
-  // ── Diff / trend report ───────────────────────────────────────────
+  // ── Diff report ───────────────────────────────────────────────────
   if (options?.baselinePath) {
     const baseline = await loadBaseline(options.baselinePath);
     if (baseline) {

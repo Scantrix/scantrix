@@ -74,7 +74,7 @@ src/
 ├── astConfigParser.ts  # AST-based config parser (TypeScript Compiler API)
 ├── ciExtractor.ts      # CI pipeline discovery and behavior extraction
 ├── cypressExtractor.ts # Cypress project detection and config parsing
-├── diffTracker.ts      # Trend tracking — snapshots, baselines, diffs
+├── diffTracker.ts      # Snapshot & diff tracking — snapshots, baselines, diffs
 ├── auditConfig.ts      # .auditrc.json loading and merging
 ├── sarifFormatter.ts   # SARIF 2.1.0 output formatter
 └── sinks/
@@ -93,12 +93,12 @@ CLI Start
   │
   └─ [scan]
        ├── 1. Load .auditrc.json (if present)
-       ├── 2. Resolve baseline for trend tracking
+       ├── 2. Resolve baseline for diff tracking
        ├── 3. Record startedAt timestamp
        ├── 4. Run scanRepo() → ScanResults
        ├── 5. Write report artifacts (MD, HTML, JSON, SARIF, email)
-       ├── 6. Save snapshot for trend tracking
-       ├── 7. Print console trend summary
+       ├── 6. Save snapshot
+       ├── 7. Print console diff summary
        └── 8. Write canonical ScanResult JSON (if --json-path set)
 ```
 
@@ -253,7 +253,7 @@ Edit the generated file to disable rules, override severities, or exclude direct
 | `--format <list>` | Output formats: `md,html,json,sarif,email` | All formats |
 | `--updates` | Check for outdated npm dependencies | `false` |
 | `--config <path>` | Path to `.auditrc.json` | Auto-detected in repo root |
-| `--diff <path>` | Baseline `findings.json` for trend diff | Auto-detected |
+| `--diff <path>` | Baseline `findings.json` for diff comparison | Auto-detected |
 | `--no-trend` | Disable local snapshot saving | `false` |
 | `--json-path <path>` | Path for canonical `ScanResult` JSON | None |
 

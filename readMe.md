@@ -98,7 +98,7 @@ npm run audit -- /path/to/repo --out ./audit-out
 
 ## Output Formats
 
-Every scan produces an **overall risk grade (A through F)** alongside severity-bucketed findings, ready for dashboards, PR comments, or executive reporting.
+Every scan produces an **overall risk grade (A through F)** alongside severity-bucketed findings.
 
 | Format | File | Description |
 |--------|------|-------------|
@@ -132,7 +132,6 @@ scantrix init [dir]
 | `--config <path>` | Path to `.auditrc.json` config file | auto-detected |
 | `--updates` | Check npm registry for outdated dependencies | off |
 | `--diff <path>` | Explicit baseline `findings.json` for comparison | auto |
-| `--no-trend` | Disable automatic snapshot saving | off |
 | `--json-path <path>` | Write canonical `ScanResult` JSON to this path | — |
 
 ### Environment Variables
@@ -200,8 +199,8 @@ Use Scantrix in CI with the provided composite action:
 - [Rules Reference](docs/RULES.md) — all 87 finding rules with severity and description
 - [CI Integration](docs/CI_INTEGRATION.md) — CI pipeline setup and quality gates
 - [CLI Architecture](docs/CLI_ARCHITECTURE.md) — module diagram and data flow
-- [Security](docs/SECURITY.md) — security model and threat considerations
-- [Finding Reference](FINDING_REFERENCE.md) — complete finding ID catalog
+- [Security](SECURITY.md) — security model and threat considerations
+- [Finding Reference](docs/FINDING_REFERENCE.md) — complete finding ID catalog
 
 ## Contributing
 
@@ -217,4 +216,4 @@ npm run test:watch
 
 ## License
 
-[AGPL-3.0](LICENSE) — Copyright (c) 2026 Shawn Tamez / Scantrix
+[MIT](LICENSE) — See LICENSE file.</br>

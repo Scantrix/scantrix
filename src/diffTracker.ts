@@ -166,22 +166,22 @@ export async function findLatestBaseline(
 }
 
 /**
- * Load the trend history — severity counts over time for trend analysis.
+ * Load the snapshot history — severity counts over time for diff comparison.
  */
-export async function loadTrendHistory(
+export async function loadSnapshotHistory(
   outDir: string,
 ): Promise<SnapshotMeta[]> {
   const snapshots = await listSnapshots(outDir);
-  const trend: SnapshotMeta[] = [];
+  const history: SnapshotMeta[] = [];
   for (const dir of snapshots) {
     try {
       const raw = await fs.readFile(path.join(dir, "meta.json"), "utf8");
-      trend.push(JSON.parse(raw) as SnapshotMeta);
+      history.push(JSON.parse(raw) as SnapshotMeta);
     } catch {
       // skip corrupt snapshots
     }
   }
-  return trend;
+  return history;
 }
 
 /**
@@ -281,7 +281,7 @@ export function computeDiff(
 export function formatDiffMarkdown(diff: DiffResult): string {
   const md: string[] = [];
 
-  md.push(`## Trend Analysis (Compared to Baseline)`);
+  md.push(`## Change Analysis (Compared to Baseline)`);
   md.push(``);
   if (diff.baselineTimestamp) {
     md.push(`> Baseline: ${diff.baselineTimestamp} → Current: ${diff.currentTimestamp}`);
@@ -383,9 +383,9 @@ export function formatDiffConsoleSummary(diff: DiffResult): string {
   if (diff.persistentFindings.length > 0) {
     parts.push(`${diff.persistentFindings.length} unchanged`);
   }
-  if (parts.length === 0) return "[trend] First scan — no baseline to compare.";
+  if (parts.length === 0) return "[diff] First scan — no baseline to compare.";
 
-  let line = `[trend] Delta since last audit: ${parts.join(", ")}.`;
+  let line = `[diff] Delta since last audit: ${parts.join(", ")}.`;
   if (diff.inventoryDelta) {
     const { totalFiles, testFiles } = diff.inventoryDelta;
     const fd = totalFiles.curr - totalFiles.prev;

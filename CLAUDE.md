@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-Scantrix (v6.3.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in minutes.
+Scantrix (v1.0.0) is a TypeScript static analysis engine that audits Playwright, Cypress, and Selenium test repositories and CI pipelines. It produces prioritized, executive-grade findings without executing tests. Read-only; runs in seconds.
 
 **CLI Engine** (`src/`) — TypeScript CommonJS compiled to `dist/`. Entry: `src/cli.ts` (subcommands: `scan` default, `init`).
 
@@ -39,7 +39,6 @@ Target Repo → Scanner Engine (50+ rules) → Report Artifacts (md/html/json/sa
 | `configExtractor.ts` / `astConfigParser.ts` | Playwright config parsing (TS Compiler API) |
 | `ciExtractor.ts` | CI YAML discovery + behavior extraction |
 | `cypressExtractor.ts` | Cypress detection |
-| `diffTracker.ts` | Trend tracking (snapshots/baselines/diffs) |
 | `auditConfig.ts` | `.auditrc.json` load/merge + rule overrides |
 | `sinks/` | JSON sink for canonical result output |
 

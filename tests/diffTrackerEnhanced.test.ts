@@ -7,7 +7,7 @@ import {
   saveSnapshot,
   listSnapshots,
   findLatestBaseline,
-  loadTrendHistory,
+  loadSnapshotHistory,
   formatDiffMarkdown,
   formatDiffConsoleSummary,
 } from "../src/diffTracker";
@@ -128,7 +128,7 @@ describe("saveSnapshot + listSnapshots + findLatestBaseline", () => {
   });
 });
 
-describe("loadTrendHistory", () => {
+describe("loadSnapshotHistory", () => {
   let tmpDir: string;
 
   beforeEach(async () => {
@@ -148,17 +148,17 @@ describe("loadTrendHistory", () => {
       25,
     );
 
-    const trend = await loadTrendHistory(tmpDir);
-    expect(trend).toHaveLength(2);
-    expect(trend[0].findingsCount).toBe(1);
-    expect(trend[1].findingsCount).toBe(2);
-    expect(trend[0].riskScore).toBe(10);
-    expect(trend[1].riskScore).toBe(25);
+    const history = await loadSnapshotHistory(tmpDir);
+    expect(history).toHaveLength(2);
+    expect(history[0].findingsCount).toBe(1);
+    expect(history[1].findingsCount).toBe(2);
+    expect(history[0].riskScore).toBe(10);
+    expect(history[1].riskScore).toBe(25);
   });
 
   it("returns empty array when no snapshots", async () => {
-    const trend = await loadTrendHistory(tmpDir);
-    expect(trend).toEqual([]);
+    const history = await loadSnapshotHistory(tmpDir);
+    expect(history).toEqual([]);
   });
 });
 
@@ -292,7 +292,7 @@ describe("formatDiffMarkdown", () => {
     diff.baselineTimestamp = "2025-01-01T00:00:00.000Z";
     const md = formatDiffMarkdown(diff);
 
-    expect(md).toContain("Trend Analysis");
+    expect(md).toContain("Change Analysis");
     expect(md).toContain("🆕 New Issues");
     expect(md).toContain("PW-003");
     expect(md).toContain("✅ Resolved Issues");

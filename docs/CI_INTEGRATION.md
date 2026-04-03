@@ -89,10 +89,9 @@ jobs:
 | `--out <dir>` | Output directory for reports | `./audit-out` |
 | `--updates` | Check for outdated npm dependencies | `false` |
 | `--config <path>` | Path to `.auditrc.json` config file | Auto-detected in repo root |
-| `--diff <path>` | Path to baseline `findings.json` for trend tracking | None |
 | `--format <list>` | Comma-separated output formats: `md,html,json,sarif,email` | All formats |
 | `--json-path <path>` | Write the canonical `ScanResult` JSON to this path (recommended for pipeline artifacts) | None |
-| `--no-trend` | Disable local snapshot saving (useful in CI where snapshots are ephemeral) | `false` |
+
 
 ## Output Files
 
@@ -105,12 +104,11 @@ jobs:
 | `repo_inventory.json` | JSON | Repository metadata (file counts, config summary) |
 | `audit.sarif` | SARIF 2.1.0 | GitHub Code Scanning / Azure DevOps integration |
 | `scantrix-results.json` | JSON | Canonical `ScanResult` artifact produced by `--json-path` (recommended for pipeline artifacts) |
-| `audit_diff.md` | Markdown | Trend report (when `--diff` is provided) |
 | `audit_diff.json` | JSON | Machine-readable diff (when `--diff` is provided) |
 
-## Trend Tracking
+## Diff Tracking
 
-To track findings over time, save the `findings.json` from each run and pass the previous baseline:
+To compare findings across runs, save the `findings.json` from each run and pass the previous baseline:
 
 ```bash
 # First run

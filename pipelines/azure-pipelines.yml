@@ -60,9 +60,9 @@ resources:
       ref: refs/heads/develop
 
     # ── Target ADO repos ─────────────────────────────────────────────
-    - repository: service-playwright
+    - repository: {your-repo-alias}
       type: git
-      name: IT-Service Value Stream/Service.Playwright.Automation
+      name: {your-project-name}/{your-repo-name}
       ref: refs/heads/develop
 
 # =========================================================================
@@ -107,9 +107,9 @@ stages:
     displayName: "Scan Repos"
     dependsOn: Build
     jobs:
-      # ── Service.Playwright.Automation ────────────────────────────────
+      # ── {your-repo-alias} ────────────────────────────────
       - template: templates/scan-repo.yml
         parameters:
-          repoAlias: service-playwright
-          repoName: Service.Playwright.Automation
-          project: IT-Service Value Stream
+          repoAlias: {your-repo-alias}
+          repoName: {your-repo-name}
+          project: {your-project-name}

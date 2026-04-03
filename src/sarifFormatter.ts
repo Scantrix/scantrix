@@ -86,7 +86,7 @@ export function toSarif(results: ScanResults): object {
           driver: {
             name: "scantrix",
             version: "6.3.0",
-            informationUri: "https://github.com/stamez/scantrix",
+            informationUri: "https://github.com/scantrix/scantrix",
             rules,
           },
         },
