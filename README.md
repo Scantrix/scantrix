@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/scantrix-logo-light.svg" alt="Scantrix" width="420" />
+  <img src="https://raw.githubusercontent.com/Scantrix/scantrix/main/docs/scantrix-logo-light.svg" alt="Scantrix" width="420" />
 </p>
 
 <h3 align="center">
@@ -35,7 +35,7 @@ Most tools tell you a test failed. **Scantrix tells you why your entire approach
  No test execution. No credentials. No file modifications. Just root causes.
 
 ### EXAMPLE FINDING
-![Example Finding](docs/images/findings.svg)
+<img src="https://raw.githubusercontent.com/Scantrix/scantrix/main/docs/images/findings.png" width="800" />
 
 ### KEY CAPABILITIES
   >
@@ -52,11 +52,11 @@ Most tools tell you a test failed. **Scantrix tells you why your entire approach
 
 ### RISK OVERVIEW
 
-![Risk Overview](docs/images/risk.svg)
+<img src="https://raw.githubusercontent.com/Scantrix/scantrix/main/docs/images/risks.png" width="800" />
 
 ### RECOMMENDED ACTIONS
 
-![Recommended Actions](docs/images/recommendations.svg)
+<img src="https://raw.githubusercontent.com/Scantrix/scantrix/main/docs/images/recommendations.png" width="800" />
 
 
 ## What Scantrix Diagnoses
