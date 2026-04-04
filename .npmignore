@@ -1,0 +1,23 @@
+# Source (compiled output in dist/ is what gets published)
+src/
+tests/
+scripts/
+
+# Config / tooling
+tsconfig.json
+vitest.config.mts
+.auditrc.example.json
+action.yml
+.github/
+.claude/
+
+# Dev artifacts
+*.swp
+.DS_Store
+Thumbs.db
+audit-out/
+scantrix-out/
+notes.txt
+assets/_preview.html
+.playwright-mcp/
+tmpclaude-*

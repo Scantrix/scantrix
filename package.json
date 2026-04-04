@@ -1,5 +1,5 @@
 {
-  "name": "scantrix",
+  "name": "@scantrix/cli",
   "version": "1.0.0",
   "description": "Static analysis and configuration-aware auditing engine for automation repositories",
   "main": "dist/cli.js",
@@ -15,9 +15,21 @@
     "test:watch": "vitest",
     "generate:favicons": "ts-node scripts/generate-favicons.ts"
   },
-  "keywords": [],
-  "author": "",
+  "keywords": [
+    "playwright",
+    "cypress",
+    "selenium",
+    "test-automation",
+    "static-analysis",
+    "audit",
+    "ci",
+    "quality"
+  ],
+  "author": "Scantrix",
   "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
   "files": [
     "dist/",
     "docs/*.svg",
@@ -28,8 +40,7 @@
   "dependencies": {
     "fast-glob": "^3.3.3",
     "markdown-it": "^14.1.0",
-    "minimist": "^1.2.8",
-    "typescript": "^5.9.3"
+    "minimist": "^1.2.8"
   },
   "devDependencies": {
     "@types/markdown-it": "^14.1.2",
@@ -38,6 +49,7 @@
     "@types/sharp": "^0.31.1",
     "sharp": "^0.34.5",
     "ts-node": "^10.9.2",
+    "typescript": "^5.9.3",
     "vitest": "^3.0.0"
   }
 }

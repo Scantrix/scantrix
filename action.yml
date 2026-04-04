@@ -59,7 +59,7 @@ runs:
 
     - name: Install Scantrix
       shell: bash
-      run: npm install -g scantrix
+      run: npm install -g @scantrix/cli
 
     - name: Run Audit
       id: audit
@@ -77,7 +77,7 @@ runs:
         fi
 
         echo "[scantrix] Running: scantrix $ARGS"
-        npx scantrix $ARGS
+        npx @scantrix/cli $ARGS
 
         # Parse outputs from canonical ScanResult JSON
         if [ -f "$RESULTS_PATH" ]; then

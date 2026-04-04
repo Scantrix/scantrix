@@ -20,8 +20,8 @@ Find out why your tests keep failing without running a single one.
   <a href="https://github.com/Scantrix/scantrix/actions/workflows/ci.yml">
     <img src="https://img.shields.io/github/actions/workflow/status/Scantrix/scantrix/ci.yml?branch=main&label=build" alt="Build Status" />
   </a>
-  <a href="https://www.npmjs.com/package/scantrix">
-    <img src="https://img.shields.io/npm/v/scantrix?color=cb3837&logo=npm&logoColor=white" alt="NPM Version" />
+  <a href="https://www.npmjs.com/package/@scantrix/cli">
+    <img src="https://img.shields.io/npm/v/@scantrix/cli?color=cb3837&logo=npm&logoColor=white" alt="NPM Version" />
   </a>
   <a href="#license">
     <img src="https://img.shields.io/badge/license-MIT-blue" alt="License: MIT" />
