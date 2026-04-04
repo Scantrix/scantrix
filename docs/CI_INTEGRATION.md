@@ -16,7 +16,7 @@ pool:
 steps:
   - task: NodeTool@0
     inputs:
-      versionSpec: '18.x'
+      versionSpec: '20.x'
 
   - script: |
       git clone https://github.com/Scantrix/scantrix.git /tmp/audit-agent
@@ -52,7 +52,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
 
       - name: Clone Audit Agent
         run: |

@@ -170,7 +170,7 @@ written via `--json-path`. Its shape is stable and versioned.
 
 ### Prerequisites
 
-- Node.js 18+
+- Node.js 20+
 - A repository to scan (Playwright, Cypress, or Selenium project)
 
 ### Step 1: Install Scantrix
@@ -277,7 +277,7 @@ CLI flags take precedence over environment variables.
 ## Frequently Asked Questions
 
 **Q: What version of Node.js do I need?**
-Node.js 18 or later.
+Node.js 20 or later.
 
 **Q: How do I view results locally?**
 Open `audit-out/audit_summary.html` in a browser, or read `audit-out/audit_summary.md`
